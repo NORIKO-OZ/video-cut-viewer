@@ -1,8 +1,5 @@
 [build]
-builder = "heroku/buildpacks:20"
+builder = "dockerfile"
 
-[[build.buildpacks]]
-url = "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git"
-
-[[build.buildpacks]] 
-url = "heroku/python"
+[deploy]
+startCommand = "python app_minimal.py"

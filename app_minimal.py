@@ -42,6 +42,31 @@ def index():
 def health():
     return jsonify({'status': 'OK', 'message': 'Application is running'})
 
+@app.route('/debug')
+def debug():
+    """システム情報とFFmpeg状態のデバッグ"""
+    import os
+    
+    debug_info = {
+        'environment_variables': {
+            'PATH': os.environ.get('PATH', 'Not set'),
+            'PORT': os.environ.get('PORT', 'Not set'),
+        },
+        'ffmpeg_status': check_ffmpeg_availability(),
+        'current_directory': os.getcwd(),
+        'directory_contents': os.listdir('.') if os.path.exists('.') else 'Cannot list directory'
+    }
+    
+    # システムコマンドでFFmpegを検索
+    try:
+        find_result = subprocess.run(['find', '/usr', '-name', 'ffmpeg', '-type', 'f'], 
+                                   capture_output=True, text=True, timeout=10)
+        debug_info['find_ffmpeg'] = find_result.stdout.strip().split('\n') if find_result.stdout.strip() else 'Not found'
+    except:
+        debug_info['find_ffmpeg'] = 'Command failed'
+    
+    return jsonify(debug_info)
+
 @app.route('/upload', methods=['POST'])
 def upload():
     try:

@@ -86,9 +86,12 @@ def upload():
         mode = request.form.get('mode', 'interval')  # 'interval' or 'scene'
         interval = int(request.form.get('interval', 5))
         
-        print(f"Processing mode: {mode}")
+        print(f"=== FORM DATA DEBUG ===")
+        print(f"All form data: {dict(request.form)}")
+        print(f"Processing mode: '{mode}' (type: {type(mode)})")
         print(f"Interval: {interval}")
         print(f"SceneDetect available: {SCENEDETECT_AVAILABLE}")
+        print(f"=== END FORM DATA DEBUG ===")
         
         # フレーム抽出を試行
         filename_no_ext = os.path.splitext(filename)[0]

@@ -226,12 +226,21 @@
             formData.append('video', fileInput.files[0]);
             
             // 処理モードを追加
-            const mode = document.querySelector('input[name="mode"]:checked').value;
+            const modeElement = document.querySelector('input[name="mode"]:checked');
+            const mode = modeElement ? modeElement.value : 'interval';
             formData.append('mode', mode);
+            
+            console.log('Selected mode:', mode); // デバッグ用
             
             if (mode === 'interval') {
                 const interval = document.getElementById('interval').value;
                 formData.append('interval', interval);
+                console.log('Selected interval:', interval); // デバッグ用
+            }
+            
+            // デバッグ: FormDataの内容を確認
+            for (let [key, value] of formData.entries()) {
+                console.log(key, value);
             }
             
             try {
@@ -245,7 +254,7 @@
                 if (response.ok) {
                     let message = `✅ ${data.message}<br>ファイル名: ${data.filename}`;
                     if (data.requested_mode && data.processing_method) {
-                        message += `<br>要求モード: ${data.requested_mode} → 実行: ${data.processing_method}`;
+                        message += `<br><strong>要求モード:</strong> ${data.requested_mode} → <strong>実行:</strong> ${data.processing_method}`;
                     }
                     if (data.frames) {
                         message += `<br>抽出フレーム数: ${data.frames}個`;

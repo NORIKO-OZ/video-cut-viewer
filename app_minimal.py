@@ -2,7 +2,10 @@ import os
 import sys
 import uuid
 import subprocess
+import tempfile
+import shutil
 from flask import Flask, render_template, request, jsonify, send_from_directory
+from PIL import Image
 
 # パス設定
 if getattr(sys, 'frozen', False):
@@ -50,6 +53,7 @@ def upload():
         filename_no_ext = os.path.splitext(filename)[0]
         scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
         
+        # まずFFmpegを試行
         frames = extract_frames_simple(filepath, scene_dir)
         
         if frames:
@@ -59,11 +63,23 @@ def upload():
                 'frames': len(frames),
                 'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None
             })
+        
+        # FFmpegが失敗した場合、代替処理を試行
+        frames = create_placeholder_frames(filepath, scene_dir, file.filename)
+        
+        if frames:
+            return jsonify({
+                'message': 'Video uploaded successfully (using placeholder processing)',
+                'filename': file.filename,
+                'frames': len(frames),
+                'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
+                'note': 'Using placeholder frame generation. Full video processing coming soon!'
+            })
         else:
             return jsonify({
                 'message': 'Video uploaded but processing failed',
                 'filename': file.filename,
-                'note': 'FFmpeg may not be available on this platform'
+                'note': 'Video processing is not available on this platform'
             })
     
     except Exception as e:
@@ -101,6 +117,63 @@ def extract_frames_simple(video_path, output_dir, interval_sec=5):
         return []
     except Exception as e:
         print(f"Error extracting frames: {e}")
+        return []
+
+def create_placeholder_frames(video_path, output_dir, original_filename):
+    """プレースホルダーフレームを生成"""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        # 動画ファイルの情報を取得
+        file_size = os.path.getsize(video_path)
+        file_size_mb = file_size / (1024 * 1024)
+        
+        # プレースホルダー画像を生成（3〜5枚）
+        num_frames = min(5, max(3, int(file_size_mb / 10)))
+        frames = []
+        
+        for i in range(num_frames):
+            # 600x400のプレースホルダー画像を作成
+            img = Image.new('RGB', (600, 400), color=(70, 130, 180))
+            
+            # 簡単なテキストを描画風に見せるために色付きの矩形を追加
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(img)
+            
+            # 背景グラデーション風
+            for y in range(0, 400, 20):
+                color_intensity = int(70 + (y / 400) * 60)
+                draw.rectangle([0, y, 600, y+20], fill=(color_intensity, color_intensity+20, 180))
+            
+            # フレーム情報
+            frame_time = i * 5  # 5秒間隔を仮定
+            minutes = frame_time // 60
+            seconds = frame_time % 60
+            
+            # テキスト領域（白い背景）
+            draw.rectangle([50, 150, 550, 250], fill=(255, 255, 255, 200))
+            draw.rectangle([52, 152, 548, 248], outline=(100, 100, 100), width=2)
+            
+            # ファイル名を短縮
+            display_name = original_filename[:30] + "..." if len(original_filename) > 30 else original_filename
+            
+            # 疑似テキストとして小さな矩形を描画
+            # タイトル行
+            draw.rectangle([70, 170, 400, 185], fill=(50, 50, 50))
+            # 時間行
+            draw.rectangle([70, 195, 200, 205], fill=(100, 100, 100))
+            # ファイル名行
+            draw.rectangle([70, 215, 350, 225], fill=(150, 150, 150))
+            
+            filename = f'frame_{i+1:03d}.jpg'
+            filepath = os.path.join(output_dir, filename)
+            img.save(filepath, 'JPEG', quality=85)
+            frames.append(filename)
+        
+        return frames
+        
+    except Exception as e:
+        print(f"Error creating placeholder frames: {e}")
         return []
 
 @app.route('/scenes/<path:filename>')

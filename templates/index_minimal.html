@@ -153,6 +153,32 @@
             <form id="uploadForm">
                 <input type="file" id="videoFile" name="video" accept="video/*" required>
                 <br><br>
+                
+                <div style="margin: 15px 0; text-align: left;">
+                    <h3 style="margin-bottom: 10px; color: #666;">処理モード選択:</h3>
+                    <div style="margin: 5px 0;">
+                        <input type="radio" id="modeInterval" name="mode" value="interval" checked>
+                        <label for="modeInterval">📐 定間隔フレーム抽出</label>
+                        <div style="margin-left: 20px; margin-top: 5px;">
+                            <label for="interval">間隔: </label>
+                            <select id="interval" name="interval" style="padding: 3px;">
+                                <option value="3">3秒</option>
+                                <option value="5" selected>5秒</option>
+                                <option value="10">10秒</option>
+                                <option value="15">15秒</option>
+                                <option value="30">30秒</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <input type="radio" id="modeScene" name="mode" value="scene">
+                        <label for="modeScene">🎬 自動シーン検出</label>
+                        <div style="margin-left: 20px; font-size: 12px; color: #666;">
+                            内容変化に基づいて自動的にシーンを検出
+                        </div>
+                    </div>
+                </div>
+                
                 <button type="submit" id="uploadBtn">🚀 アップロード</button>
             </form>
             
@@ -162,8 +188,10 @@
         <div class="coming-soon">
             <h3>🎯 現在利用可能な機能</h3>
             <p>✅ 動画アップロード機能<br>
-            ✅ 自動フレーム抽出（5秒間隔）<br>
-            🚧 高度なシーン検出機能は開発中です</p>
+            ✅ 定間隔フレーム抽出（3〜30秒）<br>
+            ✅ 自動シーン検出機能<br>
+            ✅ フレームギャラリー表示<br>
+            ✅ フレーム拡大表示</p>
         </div>
         
         <div class="features">
@@ -196,6 +224,15 @@
             
             const formData = new FormData();
             formData.append('video', fileInput.files[0]);
+            
+            // 処理モードを追加
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            formData.append('mode', mode);
+            
+            if (mode === 'interval') {
+                const interval = document.getElementById('interval').value;
+                formData.append('interval', interval);
+            }
             
             try {
                 const response = await fetch('/upload', {

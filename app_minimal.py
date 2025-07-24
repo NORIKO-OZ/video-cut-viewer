@@ -12,6 +12,13 @@ try:
 except ImportError:
     FFMPEG_AVAILABLE = False
 
+try:
+    from scenedetect import VideoManager, SceneManager
+    from scenedetect.detectors import ContentDetector
+    SCENEDETECT_AVAILABLE = True
+except ImportError:
+    SCENEDETECT_AVAILABLE = False
+
 # パス設定
 if getattr(sys, 'frozen', False):
     base_dir = os.path.dirname(sys.executable)
@@ -54,6 +61,10 @@ def upload():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
         
+        # 処理モードを取得
+        mode = request.form.get('mode', 'interval')  # 'interval' or 'scene'
+        interval = int(request.form.get('interval', 5))
+        
         # フレーム抽出を試行
         filename_no_ext = os.path.splitext(filename)[0]
         scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
@@ -61,15 +72,21 @@ def upload():
         # FFmpeg可用性チェック
         ffmpeg_status = check_ffmpeg_availability()
         
-        # まずFFmpegを試行
-        frames = extract_frames_simple(filepath, scene_dir)
+        # 処理モードに応じて実行
+        if mode == 'scene' and SCENEDETECT_AVAILABLE:
+            frames = extract_scenes_with_detection(filepath, scene_dir)
+            processing_method = 'scene detection'
+        else:
+            frames = extract_frames_simple(filepath, scene_dir, interval)
+            processing_method = f'interval extraction ({interval}s)'
         
         if frames:
             return jsonify({
-                'message': 'Video processed successfully with real frame extraction',
+                'message': f'Video processed successfully using {processing_method}',
                 'filename': file.filename,
                 'frames': len(frames),
                 'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
+                'processing_method': processing_method,
                 'debug_info': format_debug_info(ffmpeg_status)
             })
         
@@ -239,6 +256,73 @@ def extract_frames_with_subprocess(video_path, output_dir, interval_sec=5):
         return []
     except FileNotFoundError:
         print("FFmpeg binary not found")
+        return []
+
+def extract_scenes_with_detection(video_path, output_dir):
+    """PySceneDetectを使用したシーン検出ベースのフレーム抽出"""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        print(f"Starting scene detection for: {video_path}")
+        
+        # VideoManagerでビデオを開く
+        video_manager = VideoManager([video_path])
+        scene_manager = SceneManager()
+        
+        # ContentDetectorを追加（閾値30.0で設定）
+        scene_manager.add_detector(ContentDetector(threshold=30.0))
+        
+        # シーン検出を実行
+        video_manager.set_downscale_factor()
+        video_manager.start()
+        scene_manager.detect_scenes(frame_source=video_manager)
+        scene_list = scene_manager.get_scene_list()
+        
+        print(f"Detected {len(scene_list)} scenes")
+        
+        if not scene_list:
+            print("No scenes detected, falling back to interval extraction")
+            return []
+        
+        # 各シーンの開始フレームを抽出
+        frames = []
+        video_fps = video_manager.get_framerate()
+        
+        for i, scene in enumerate(scene_list):
+            try:
+                start_time = scene[0].get_seconds()
+                
+                # FFmpegでそのタイミングのフレームを抽出
+                output_filename = f'scene_{i+1:03d}.jpg'
+                output_path = os.path.join(output_dir, output_filename)
+                
+                # FFmpegコマンドで特定の時間のフレームを抽出
+                cmd = [
+                    'ffmpeg', '-ss', str(start_time), '-i', video_path,
+                    '-frames:v', '1', '-q:v', '2', '-y',
+                    output_path
+                ]
+                
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0 and os.path.exists(output_path):
+                    frames.append(output_filename)
+                    print(f"Extracted scene {i+1} at {start_time:.2f}s")
+                else:
+                    print(f"Failed to extract scene {i+1}: {result.stderr}")
+                    
+            except Exception as e:
+                print(f"Error extracting scene {i+1}: {e}")
+                continue
+        
+        video_manager.release()
+        print(f"Successfully extracted {len(frames)} scene frames")
+        return frames
+        
+    except Exception as e:
+        print(f"Scene detection failed: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def create_placeholder_frames(video_path, output_dir, original_filename):

@@ -58,15 +58,19 @@ def upload():
         filename_no_ext = os.path.splitext(filename)[0]
         scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
         
+        # FFmpeg可用性チェック
+        ffmpeg_status = check_ffmpeg_availability()
+        
         # まずFFmpegを試行
         frames = extract_frames_simple(filepath, scene_dir)
         
         if frames:
             return jsonify({
-                'message': 'Video processed successfully',
+                'message': 'Video processed successfully with real frame extraction',
                 'filename': file.filename,
                 'frames': len(frames),
-                'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None
+                'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
+                'debug_info': f'FFmpeg status: {ffmpeg_status}'
             })
         
         # FFmpegが失敗した場合、代替処理を試行
@@ -78,35 +82,78 @@ def upload():
                 'filename': file.filename,
                 'frames': len(frames),
                 'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
-                'note': 'Using placeholder frame generation. Full video processing coming soon!'
+                'note': 'Using placeholder frame generation. Real video processing failed.',
+                'debug_info': f'FFmpeg status: {ffmpeg_status}'
             })
         else:
             return jsonify({
                 'message': 'Video uploaded but processing failed',
                 'filename': file.filename,
-                'note': 'Video processing is not available on this platform'
+                'note': 'Video processing is not available on this platform',
+                'debug_info': f'FFmpeg status: {ffmpeg_status}'
             })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def check_ffmpeg_availability():
+    """FFmpegの利用可能性をチェック"""
+    status = {}
+    
+    # ffmpeg-pythonライブラリの確認
+    status['ffmpeg_python_lib'] = FFMPEG_AVAILABLE
+    
+    # FFmpegバイナリの確認
+    try:
+        result = subprocess.run(['ffmpeg', '-version'], 
+                              capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            status['ffmpeg_binary'] = 'Available'
+            # バージョン情報の最初の行を取得
+            version_line = result.stdout.split('\n')[0]
+            status['ffmpeg_version'] = version_line
+        else:
+            status['ffmpeg_binary'] = 'Error'
+    except FileNotFoundError:
+        status['ffmpeg_binary'] = 'Not found'
+    except Exception as e:
+        status['ffmpeg_binary'] = f'Error: {str(e)}'
+    
+    return status
+
 def extract_frames_simple(video_path, output_dir, interval_sec=5):
     """動画からフレームを抽出（ffmpeg-pythonまたはsubprocessを使用）"""
     os.makedirs(output_dir, exist_ok=True)
     
+    print(f"Starting frame extraction from: {video_path}")
+    print(f"Output directory: {output_dir}")
+    print(f"FFmpeg Python available: {FFMPEG_AVAILABLE}")
+    
     # まずffmpeg-pythonを試行
     if FFMPEG_AVAILABLE:
         try:
-            return extract_frames_with_ffmpeg_python(video_path, output_dir, interval_sec)
+            print("Trying ffmpeg-python approach...")
+            result = extract_frames_with_ffmpeg_python(video_path, output_dir, interval_sec)
+            if result:
+                return result
         except Exception as e:
             print(f"ffmpeg-python failed: {e}")
+            import traceback
+            traceback.print_exc()
     
     # フォールバック: 直接subprocessでffmpegを呼び出し
     try:
-        return extract_frames_with_subprocess(video_path, output_dir, interval_sec)
+        print("Trying subprocess approach...")
+        result = extract_frames_with_subprocess(video_path, output_dir, interval_sec)
+        if result:
+            return result
     except Exception as e:
         print(f"subprocess ffmpeg failed: {e}")
-        return []
+        import traceback
+        traceback.print_exc()
+    
+    print("All FFmpeg approaches failed, falling back to placeholder")
+    return []
 
 def extract_frames_with_ffmpeg_python(video_path, output_dir, interval_sec=5):
     """ffmpeg-pythonを使用したフレーム抽出"""

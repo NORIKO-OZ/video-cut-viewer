@@ -67,6 +67,45 @@ def debug():
     
     return jsonify(debug_info)
 
+@app.route('/test-scene-detection')
+def test_scene_detection():
+    """シーン検出機能のテスト"""
+    try:
+        # テスト用の小さな動画ファイルを想定
+        test_video = "/tmp/test.mp4"  # 存在しないファイルでテスト
+        test_output = "/tmp/test_scenes"
+        
+        # まずffprobeのテスト
+        probe_cmd = ['ffprobe', '-version']
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
+        
+        result = {
+            'ffprobe_available': probe_result.returncode == 0,
+            'ffprobe_version': probe_result.stdout.split('\n')[0] if probe_result.returncode == 0 else 'Failed',
+            'ffprobe_error': probe_result.stderr if probe_result.returncode != 0 else None,
+        }
+        
+        # FFmpegのシーンフィルターテスト
+        try:
+            scene_test_cmd = ['ffmpeg', '-f', 'lavfi', '-i', 'testsrc=duration=10:size=320x240:rate=1', 
+                             '-vf', 'select=gt(scene\\,0.3),showinfo', '-vsync', 'vfr', '-f', 'null', '-']
+            scene_test_result = subprocess.run(scene_test_cmd, capture_output=True, text=True, timeout=15)
+            
+            result['scene_filter_test'] = {
+                'return_code': scene_test_result.returncode,
+                'stderr_length': len(scene_test_result.stderr),
+                'contains_showinfo': 'showinfo' in scene_test_result.stderr,
+                'contains_pts_time': 'pts_time' in scene_test_result.stderr,
+                'stderr_sample': scene_test_result.stderr[:500] if scene_test_result.stderr else 'No stderr'
+            }
+        except Exception as e:
+            result['scene_filter_test'] = {'error': str(e)}
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 @app.route('/upload', methods=['POST'])
 def upload():
     try:

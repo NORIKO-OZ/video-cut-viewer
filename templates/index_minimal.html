@@ -236,6 +236,9 @@
                     if (data.note) {
                         message += `<br><div style="margin-top: 10px; font-style: italic; color: #666;">${data.note}</div>`;
                     }
+                    if (data.debug_info) {
+                        message += `<br><div style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 5px; font-family: monospace; font-size: 12px; color: #333;"><strong>デバッグ情報:</strong><br>${data.debug_info}</div>`;
+                    }
                     showResult(message, 'success');
                 } else {
                     showResult(`❌ ${data.error}`, 'error');

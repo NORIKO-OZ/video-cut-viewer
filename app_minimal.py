@@ -70,7 +70,7 @@ def upload():
                 'filename': file.filename,
                 'frames': len(frames),
                 'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
-                'debug_info': f'FFmpeg status: {ffmpeg_status}'
+                'debug_info': format_debug_info(ffmpeg_status)
             })
         
         # FFmpegが失敗した場合、代替処理を試行
@@ -83,14 +83,14 @@ def upload():
                 'frames': len(frames),
                 'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
                 'note': 'Using placeholder frame generation. Real video processing failed.',
-                'debug_info': f'FFmpeg status: {ffmpeg_status}'
+                'debug_info': format_debug_info(ffmpeg_status)
             })
         else:
             return jsonify({
                 'message': 'Video uploaded but processing failed',
                 'filename': file.filename,
                 'note': 'Video processing is not available on this platform',
-                'debug_info': f'FFmpeg status: {ffmpeg_status}'
+                'debug_info': format_debug_info(ffmpeg_status)
             })
     
     except Exception as e:
@@ -120,6 +120,22 @@ def check_ffmpeg_availability():
         status['ffmpeg_binary'] = f'Error: {str(e)}'
     
     return status
+
+def format_debug_info(status):
+    """デバッグ情報を読みやすい形式に整形"""
+    info_lines = []
+    info_lines.append(f"• ffmpeg-python library: {'✅ Available' if status.get('ffmpeg_python_lib') else '❌ Not available'}")
+    
+    binary_status = status.get('ffmpeg_binary', 'Unknown')
+    if binary_status == 'Available':
+        info_lines.append("• FFmpeg binary: ✅ Available")
+        if 'ffmpeg_version' in status:
+            version = status['ffmpeg_version'][:50] + "..." if len(status['ffmpeg_version']) > 50 else status['ffmpeg_version']
+            info_lines.append(f"• Version: {version}")
+    else:
+        info_lines.append(f"• FFmpeg binary: ❌ {binary_status}")
+    
+    return "<br>".join(info_lines)
 
 def extract_frames_simple(video_path, output_dir, interval_sec=5):
     """動画からフレームを抽出（ffmpeg-pythonまたはsubprocessを使用）"""

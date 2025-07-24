@@ -103,21 +103,29 @@ def check_ffmpeg_availability():
     # ffmpeg-pythonライブラリの確認
     status['ffmpeg_python_lib'] = FFMPEG_AVAILABLE
     
-    # FFmpegバイナリの確認
-    try:
-        result = subprocess.run(['ffmpeg', '-version'], 
-                              capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            status['ffmpeg_binary'] = 'Available'
-            # バージョン情報の最初の行を取得
-            version_line = result.stdout.split('\n')[0]
-            status['ffmpeg_version'] = version_line
-        else:
-            status['ffmpeg_binary'] = 'Error'
-    except FileNotFoundError:
-        status['ffmpeg_binary'] = 'Not found'
-    except Exception as e:
-        status['ffmpeg_binary'] = f'Error: {str(e)}'
+    # 複数のパスでFFmpegを検索
+    ffmpeg_paths = ['ffmpeg', '/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/opt/ffmpeg/bin/ffmpeg']
+    
+    for ffmpeg_path in ffmpeg_paths:
+        try:
+            result = subprocess.run([ffmpeg_path, '-version'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                status['ffmpeg_binary'] = 'Available'
+                status['ffmpeg_path'] = ffmpeg_path
+                # バージョン情報の最初の行を取得
+                version_line = result.stdout.split('\n')[0]
+                status['ffmpeg_version'] = version_line
+                return status
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+        except Exception as e:
+            status['last_error'] = str(e)
+            continue
+    
+    # すべてのパスで見つからなかった場合
+    status['ffmpeg_binary'] = 'Not found'
+    status['searched_paths'] = ', '.join(ffmpeg_paths)
     
     return status
 
@@ -129,11 +137,17 @@ def format_debug_info(status):
     binary_status = status.get('ffmpeg_binary', 'Unknown')
     if binary_status == 'Available':
         info_lines.append("• FFmpeg binary: ✅ Available")
+        if 'ffmpeg_path' in status:
+            info_lines.append(f"• Path: {status['ffmpeg_path']}")
         if 'ffmpeg_version' in status:
-            version = status['ffmpeg_version'][:50] + "..." if len(status['ffmpeg_version']) > 50 else status['ffmpeg_version']
+            version = status['ffmpeg_version'][:60] + "..." if len(status['ffmpeg_version']) > 60 else status['ffmpeg_version']
             info_lines.append(f"• Version: {version}")
     else:
         info_lines.append(f"• FFmpeg binary: ❌ {binary_status}")
+        if 'searched_paths' in status:
+            info_lines.append(f"• Searched paths: {status['searched_paths']}")
+        if 'last_error' in status:
+            info_lines.append(f"• Last error: {status['last_error']}")
     
     return "<br>".join(info_lines)
 

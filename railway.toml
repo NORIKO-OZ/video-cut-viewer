@@ -1,0 +1,8 @@
+[build]
+builder = "heroku/buildpacks:20"
+
+[[build.buildpacks]]
+url = "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git"
+
+[[build.buildpacks]] 
+url = "heroku/python"

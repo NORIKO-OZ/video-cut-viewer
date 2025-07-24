@@ -126,8 +126,16 @@ def check_ffmpeg_availability():
     # PySceneDetectの確認
     status['scenedetect_available'] = SCENEDETECT_AVAILABLE
     
-    # 複数のパスでFFmpegを検索
-    ffmpeg_paths = ['ffmpeg', '/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/opt/ffmpeg/bin/ffmpeg']
+    # より多くのパスでFFmpegを検索
+    ffmpeg_paths = [
+        'ffmpeg', 
+        '/usr/bin/ffmpeg', 
+        '/usr/local/bin/ffmpeg', 
+        '/opt/ffmpeg/bin/ffmpeg',
+        '/app/.heroku/usr/bin/ffmpeg',
+        '/app/.apt/usr/bin/ffmpeg',
+        '/usr/local/stow/ffmpeg/bin/ffmpeg'
+    ]
     
     for ffmpeg_path in ffmpeg_paths:
         try:
@@ -155,7 +163,29 @@ def check_ffmpeg_availability():
             status['last_error'] = str(e)
             continue
     
-    # すべてのパスで見つからなかった場合
+    # すべてのパスで見つからなかった場合、whichコマンドで検索
+    try:
+        which_result = subprocess.run(['which', 'ffmpeg'], 
+                                    capture_output=True, text=True, timeout=5)
+        if which_result.returncode == 0:
+            ffmpeg_path = which_result.stdout.strip()
+            if ffmpeg_path:
+                status['ffmpeg_binary'] = 'Available'
+                status['ffmpeg_path'] = f'{ffmpeg_path} (found via which)'
+                # バージョンを取得
+                try:
+                    version_result = subprocess.run([ffmpeg_path, '-version'], 
+                                                  capture_output=True, text=True, timeout=5)
+                    if version_result.returncode == 0:
+                        version_line = version_result.stdout.split('\n')[0]
+                        status['ffmpeg_version'] = version_line
+                except:
+                    pass
+                return status
+    except:
+        pass
+    
+    # それでも見つからない場合
     status['ffmpeg_binary'] = 'Not found'
     status['searched_paths'] = ', '.join(ffmpeg_paths)
     

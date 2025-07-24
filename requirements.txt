@@ -2,5 +2,6 @@ Flask==2.3.3
 Pillow==10.0.1
 gunicorn==21.2.0
 ffmpeg-python==0.2.0
-scenedetect==0.6.2
+numpy==1.24.3
 opencv-python-headless==4.8.1.78
+scenedetect[opencv]==0.6.2

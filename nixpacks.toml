@@ -1,7 +1,8 @@
 [phases.setup]
-aptPkgs = ["ffmpeg", "libavcodec-extra"]
+aptPkgs = ["ffmpeg", "libavcodec-extra", "libglib2.0-0", "libsm6", "libxext6", "libxrender-dev", "libgomp1"]
 
 [phases.build]
+env = { "OPENCV_SKIP_PYTHON_LOADER" = "1" }
 cmds = ["pip install -r requirements.txt"]
 
 [start]

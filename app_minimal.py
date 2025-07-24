@@ -77,14 +77,17 @@ def upload():
         ffmpeg_status = check_ffmpeg_availability()
         
         # 処理モードに応じて実行
-        if mode == 'scene' and SCENEDETECT_AVAILABLE:
-            print("Using scene detection mode")
-            frames = extract_scenes_with_detection(filepath, scene_dir)
-            processing_method = 'scene detection'
+        if mode == 'scene':
+            if SCENEDETECT_AVAILABLE:
+                print("Using PySceneDetect scene detection mode")
+                frames = extract_scenes_with_detection(filepath, scene_dir)
+                processing_method = 'scene detection (PySceneDetect)'
+            else:
+                print("PySceneDetect not available, using FFmpeg-based scene detection")
+                frames = extract_scenes_with_ffmpeg(filepath, scene_dir)
+                processing_method = 'scene detection (FFmpeg-based)'
         else:
             print(f"Using interval mode with {interval}s interval")
-            if mode == 'scene' and not SCENEDETECT_AVAILABLE:
-                print("Scene detection requested but PySceneDetect not available, falling back to interval")
             frames = extract_frames_simple(filepath, scene_dir, interval)
             processing_method = f'interval extraction ({interval}s)'
         
@@ -334,6 +337,101 @@ def extract_scenes_with_detection(video_path, output_dir):
         
     except Exception as e:
         print(f"Scene detection failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+def extract_scenes_with_ffmpeg(video_path, output_dir):
+    """FFmpegのシーン検出フィルターを使用したシーン抽出"""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        print(f"Starting FFmpeg-based scene detection for: {video_path}")
+        
+        # FFmpegのsceneフィルターを使用してシーン変化点を検出
+        # まず動画の長さを取得
+        probe_cmd = ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', video_path]
+        duration_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+        
+        if duration_result.returncode != 0:
+            print("Failed to get video duration")
+            return []
+        
+        try:
+            duration = float(duration_result.stdout.strip())
+        except ValueError:
+            print("Invalid duration format")
+            return []
+        
+        print(f"Video duration: {duration:.2f} seconds")
+        
+        # シーン検出 - 閾値0.3で設定
+        scene_cmd = [
+            'ffmpeg', '-i', video_path,
+            '-vf', 'select=gt(scene\\,0.3),showinfo',
+            '-vsync', 'vfr',
+            '-f', 'null', '-'
+        ]
+        
+        result = subprocess.run(scene_cmd, capture_output=True, text=True, timeout=120)
+        
+        # showinfoの出力からタイムスタンプを抽出
+        timestamps = []
+        for line in result.stderr.split('\n'):
+            if 'pts_time:' in line:
+                try:
+                    # pts_time:12.345 の形式から時間を抽出
+                    pts_start = line.find('pts_time:') + 9
+                    pts_end = line.find(' ', pts_start)
+                    if pts_end == -1:
+                        pts_end = len(line)
+                    timestamp = float(line[pts_start:pts_end])
+                    timestamps.append(timestamp)
+                except (ValueError, IndexError):
+                    continue
+        
+        # 開始フレームも追加
+        if 0.0 not in timestamps:
+            timestamps.insert(0, 0.0)
+        
+        timestamps.sort()
+        print(f"Detected {len(timestamps)} scene changes at: {timestamps}")
+        
+        if len(timestamps) == 0:
+            print("No scenes detected, creating frames at regular intervals")
+            # フォールバック：10秒間隔で作成
+            timestamps = [i * 10 for i in range(int(duration // 10) + 1)]
+        
+        # 各タイムスタンプでフレームを抽出
+        frames = []
+        for i, timestamp in enumerate(timestamps[:15]):  # 最大15フレームに制限
+            try:
+                output_filename = f'scene_{i+1:03d}.jpg'
+                output_path = os.path.join(output_dir, output_filename)
+                
+                cmd = [
+                    'ffmpeg', '-ss', str(timestamp), '-i', video_path,
+                    '-frames:v', '1', '-q:v', '2', '-y',
+                    output_path
+                ]
+                
+                frame_result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                
+                if frame_result.returncode == 0 and os.path.exists(output_path):
+                    frames.append(output_filename)
+                    print(f"Extracted scene {i+1} at {timestamp:.2f}s")
+                else:
+                    print(f"Failed to extract scene {i+1}: {frame_result.stderr}")
+                    
+            except Exception as e:
+                print(f"Error extracting scene {i+1}: {e}")
+                continue
+        
+        print(f"Successfully extracted {len(frames)} scene frames using FFmpeg")
+        return frames
+        
+    except Exception as e:
+        print(f"FFmpeg scene detection failed: {e}")
         import traceback
         traceback.print_exc()
         return []

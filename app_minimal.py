@@ -6,6 +6,11 @@ import tempfile
 import shutil
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from PIL import Image
+try:
+    import ffmpeg
+    FFMPEG_AVAILABLE = True
+except ImportError:
+    FFMPEG_AVAILABLE = False
 
 # パス設定
 if getattr(sys, 'frozen', False):
@@ -86,37 +91,77 @@ def upload():
         return jsonify({'error': str(e)}), 500
 
 def extract_frames_simple(video_path, output_dir, interval_sec=5):
-    """シンプルなフレーム抽出（FFmpegを使用）"""
+    """動画からフレームを抽出（ffmpeg-pythonまたはsubprocessを使用）"""
     os.makedirs(output_dir, exist_ok=True)
     
+    # まずffmpeg-pythonを試行
+    if FFMPEG_AVAILABLE:
+        try:
+            return extract_frames_with_ffmpeg_python(video_path, output_dir, interval_sec)
+        except Exception as e:
+            print(f"ffmpeg-python failed: {e}")
+    
+    # フォールバック: 直接subprocessでffmpegを呼び出し
     try:
-        # FFmpegでフレームを抽出
+        return extract_frames_with_subprocess(video_path, output_dir, interval_sec)
+    except Exception as e:
+        print(f"subprocess ffmpeg failed: {e}")
+        return []
+
+def extract_frames_with_ffmpeg_python(video_path, output_dir, interval_sec=5):
+    """ffmpeg-pythonを使用したフレーム抽出"""
+    try:
+        # 動画情報を取得
+        probe = ffmpeg.probe(video_path)
+        duration = float(probe['streams'][0]['duration'])
+        
+        # フレーム抽出
+        output_pattern = os.path.join(output_dir, 'frame_%03d.jpg')
+        (
+            ffmpeg
+            .input(video_path)
+            .filter('fps', fps=f'1/{interval_sec}')
+            .output(output_pattern, vcodec='mjpeg', qscale=2)
+            .overwrite_output()
+            .run(capture_stdout=True, capture_stderr=True, timeout=120)
+        )
+        
+        # 生成されたファイルを取得
+        files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
+        print(f"Successfully extracted {len(files)} frames using ffmpeg-python")
+        return files
+        
+    except Exception as e:
+        print(f"ffmpeg-python extraction error: {e}")
+        raise
+
+def extract_frames_with_subprocess(video_path, output_dir, interval_sec=5):
+    """subprocessを使用したFFmpeg呼び出し"""
+    try:
+        output_pattern = os.path.join(output_dir, 'frame_%03d.jpg')
         cmd = [
             'ffmpeg', '-i', video_path,
             '-vf', f'fps=1/{interval_sec}',
             '-q:v', '2',
             '-y',  # overwrite
-            os.path.join(output_dir, 'frame_%03d.jpg')
+            output_pattern
         ]
         
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         
         if result.returncode == 0:
-            # 生成されたファイルを取得
             files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
+            print(f"Successfully extracted {len(files)} frames using subprocess")
             return files
         else:
-            print(f"FFmpeg error: {result.stderr}")
+            print(f"FFmpeg subprocess error: {result.stderr}")
             return []
         
     except subprocess.TimeoutExpired:
         print("FFmpeg timeout")
         return []
     except FileNotFoundError:
-        print("FFmpeg not found")
-        return []
-    except Exception as e:
-        print(f"Error extracting frames: {e}")
+        print("FFmpeg binary not found")
         return []
 
 def create_placeholder_frames(video_path, output_dir, original_filename):

@@ -244,6 +244,9 @@
                 
                 if (response.ok) {
                     let message = `✅ ${data.message}<br>ファイル名: ${data.filename}`;
+                    if (data.requested_mode && data.processing_method) {
+                        message += `<br>要求モード: ${data.requested_mode} → 実行: ${data.processing_method}`;
+                    }
                     if (data.frames) {
                         message += `<br>抽出フレーム数: ${data.frames}個`;
                         

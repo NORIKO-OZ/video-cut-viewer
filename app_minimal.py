@@ -65,6 +65,10 @@ def upload():
         mode = request.form.get('mode', 'interval')  # 'interval' or 'scene'
         interval = int(request.form.get('interval', 5))
         
+        print(f"Processing mode: {mode}")
+        print(f"Interval: {interval}")
+        print(f"SceneDetect available: {SCENEDETECT_AVAILABLE}")
+        
         # フレーム抽出を試行
         filename_no_ext = os.path.splitext(filename)[0]
         scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
@@ -74,9 +78,13 @@ def upload():
         
         # 処理モードに応じて実行
         if mode == 'scene' and SCENEDETECT_AVAILABLE:
+            print("Using scene detection mode")
             frames = extract_scenes_with_detection(filepath, scene_dir)
             processing_method = 'scene detection'
         else:
+            print(f"Using interval mode with {interval}s interval")
+            if mode == 'scene' and not SCENEDETECT_AVAILABLE:
+                print("Scene detection requested but PySceneDetect not available, falling back to interval")
             frames = extract_frames_simple(filepath, scene_dir, interval)
             processing_method = f'interval extraction ({interval}s)'
         
@@ -87,6 +95,7 @@ def upload():
                 'frames': len(frames),
                 'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
                 'processing_method': processing_method,
+                'requested_mode': mode,
                 'debug_info': format_debug_info(ffmpeg_status)
             })
         
@@ -120,6 +129,9 @@ def check_ffmpeg_availability():
     # ffmpeg-pythonライブラリの確認
     status['ffmpeg_python_lib'] = FFMPEG_AVAILABLE
     
+    # PySceneDetectの確認
+    status['scenedetect_available'] = SCENEDETECT_AVAILABLE
+    
     # 複数のパスでFFmpegを検索
     ffmpeg_paths = ['ffmpeg', '/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/opt/ffmpeg/bin/ffmpeg']
     
@@ -150,6 +162,7 @@ def format_debug_info(status):
     """デバッグ情報を読みやすい形式に整形"""
     info_lines = []
     info_lines.append(f"• ffmpeg-python library: {'✅ Available' if status.get('ffmpeg_python_lib') else '❌ Not available'}")
+    info_lines.append(f"• PySceneDetect library: {'✅ Available' if status.get('scenedetect_available') else '❌ Not available'}")
     
     binary_status = status.get('ffmpeg_binary', 'Unknown')
     if binary_status == 'Available':

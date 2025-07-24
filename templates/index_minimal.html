@@ -160,8 +160,10 @@
         </div>
         
         <div class="coming-soon">
-            <h3>🚧 開発中の機能</h3>
-            <p>動画のシーン検出機能は現在開発中です。しばらくお待ちください。</p>
+            <h3>🎯 現在利用可能な機能</h3>
+            <p>✅ 動画アップロード機能<br>
+            ✅ 自動フレーム抽出（5秒間隔）<br>
+            🚧 高度なシーン検出機能は開発中です</p>
         </div>
         
         <div class="features">
@@ -204,7 +206,17 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    showResult(`✅ ${data.message}<br>ファイル名: ${data.filename}<br>${data.note}`, 'success');
+                    let message = `✅ ${data.message}<br>ファイル名: ${data.filename}`;
+                    if (data.frames) {
+                        message += `<br>抽出フレーム数: ${data.frames}個`;
+                        if (data.preview_url) {
+                            message += `<br><img src="${data.preview_url}" style="max-width: 200px; margin-top: 10px; border-radius: 5px;">`;
+                        }
+                    }
+                    if (data.note) {
+                        message += `<br>${data.note}`;
+                    }
+                    showResult(message, 'success');
                 } else {
                     showResult(`❌ ${data.error}`, 'error');
                 }

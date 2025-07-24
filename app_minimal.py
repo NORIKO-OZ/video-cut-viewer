@@ -12,12 +12,8 @@ try:
 except ImportError:
     FFMPEG_AVAILABLE = False
 
-try:
-    from scenedetect import VideoManager, SceneManager
-    from scenedetect.detectors import ContentDetector
-    SCENEDETECT_AVAILABLE = True
-except ImportError:
-    SCENEDETECT_AVAILABLE = False
+# PySceneDetectは重い依存関係のため無効化
+SCENEDETECT_AVAILABLE = False
 
 # パス設定
 if getattr(sys, 'frozen', False):
@@ -78,14 +74,9 @@ def upload():
         
         # 処理モードに応じて実行
         if mode == 'scene':
-            if SCENEDETECT_AVAILABLE:
-                print("Using PySceneDetect scene detection mode")
-                frames = extract_scenes_with_detection(filepath, scene_dir)
-                processing_method = 'scene detection (PySceneDetect)'
-            else:
-                print("PySceneDetect not available, using FFmpeg-based scene detection")
-                frames = extract_scenes_with_ffmpeg(filepath, scene_dir)
-                processing_method = 'scene detection (FFmpeg-based)'
+            print("Using FFmpeg-based scene detection mode")
+            frames = extract_scenes_with_ffmpeg(filepath, scene_dir)
+            processing_method = 'scene detection (FFmpeg-based)'
         else:
             print(f"Using interval mode with {interval}s interval")
             frames = extract_frames_simple(filepath, scene_dir, interval)
@@ -165,7 +156,7 @@ def format_debug_info(status):
     """デバッグ情報を読みやすい形式に整形"""
     info_lines = []
     info_lines.append(f"• ffmpeg-python library: {'✅ Available' if status.get('ffmpeg_python_lib') else '❌ Not available'}")
-    info_lines.append(f"• PySceneDetect library: {'✅ Available' if status.get('scenedetect_available') else '❌ Not available'}")
+    info_lines.append("• Scene detection: ✅ FFmpeg-based (lightweight)")
     
     binary_status = status.get('ffmpeg_binary', 'Unknown')
     if binary_status == 'Available':

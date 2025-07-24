@@ -139,6 +139,15 @@ def check_ffmpeg_availability():
                 # バージョン情報の最初の行を取得
                 version_line = result.stdout.split('\n')[0]
                 status['ffmpeg_version'] = version_line
+                
+                # ffprobeもチェック
+                try:
+                    probe_result = subprocess.run(['ffprobe', '-version'], 
+                                                capture_output=True, text=True, timeout=5)
+                    status['ffprobe_available'] = probe_result.returncode == 0
+                except:
+                    status['ffprobe_available'] = False
+                
                 return status
         except (FileNotFoundError, subprocess.TimeoutExpired):
             continue

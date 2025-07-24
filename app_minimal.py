@@ -405,14 +405,21 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
     
     try:
         print(f"Starting FFmpeg-based scene detection for: {video_path}")
+        print(f"Output directory: {output_dir}")
+        print(f"Video file exists: {os.path.exists(video_path)}")
+        if os.path.exists(video_path):
+            print(f"Video file size: {os.path.getsize(video_path)} bytes")
         
         # FFmpegのsceneフィルターを使用してシーン変化点を検出
         # まず動画の長さを取得
         probe_cmd = ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', video_path]
+        print(f"Running probe command: {' '.join(probe_cmd)}")
         duration_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
         
         if duration_result.returncode != 0:
-            print("Failed to get video duration")
+            print(f"Failed to get video duration - return code: {duration_result.returncode}")
+            print(f"ffprobe stdout: {duration_result.stdout}")
+            print(f"ffprobe stderr: {duration_result.stderr}")
             return []
         
         try:
@@ -431,7 +438,14 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
             '-f', 'null', '-'
         ]
         
+        print(f"Running scene detection command: {' '.join(scene_cmd)}")
         result = subprocess.run(scene_cmd, capture_output=True, text=True, timeout=120)
+        print(f"Scene detection return code: {result.returncode}")
+        print(f"Scene detection stderr length: {len(result.stderr)}")
+        if len(result.stderr) > 1000:
+            print(f"Scene detection stderr (first 1000 chars): {result.stderr[:1000]}")
+        else:
+            print(f"Scene detection stderr: {result.stderr}")
         
         # showinfoの出力からタイムスタンプを抽出
         timestamps = []

@@ -128,8 +128,17 @@ def create_placeholder_frames(video_path, output_dir, original_filename):
         file_size = os.path.getsize(video_path)
         file_size_mb = file_size / (1024 * 1024)
         
-        # プレースホルダー画像を生成（3〜5枚）
-        num_frames = min(5, max(3, int(file_size_mb / 10)))
+        # より実用的なフレーム数計算
+        # ファイルサイズから大まかな動画時間を推定（粗い近似）
+        # 一般的に 1分の動画 ≈ 10-50MB（品質による）
+        estimated_duration_minutes = max(1, file_size_mb / 15)  # 15MB/分と仮定
+        
+        # 5秒間隔でフレーム抽出と仮定
+        frames_per_minute = 12  # 60秒 / 5秒間隔
+        estimated_frames = int(estimated_duration_minutes * frames_per_minute)
+        
+        # 実用的な範囲に制限（3〜20枚）
+        num_frames = min(20, max(3, estimated_frames))
         frames = []
         
         for i in range(num_frames):
@@ -151,19 +160,25 @@ def create_placeholder_frames(video_path, output_dir, original_filename):
             seconds = frame_time % 60
             
             # テキスト領域（白い背景）
-            draw.rectangle([50, 150, 550, 250], fill=(255, 255, 255, 200))
-            draw.rectangle([52, 152, 548, 248], outline=(100, 100, 100), width=2)
+            draw.rectangle([50, 120, 550, 280], fill=(255, 255, 255, 220))
+            draw.rectangle([52, 122, 548, 278], outline=(100, 100, 100), width=2)
             
             # ファイル名を短縮
-            display_name = original_filename[:30] + "..." if len(original_filename) > 30 else original_filename
+            display_name = original_filename[:25] + "..." if len(original_filename) > 25 else original_filename
             
-            # 疑似テキストとして小さな矩形を描画
-            # タイトル行
-            draw.rectangle([70, 170, 400, 185], fill=(50, 50, 50))
-            # 時間行
-            draw.rectangle([70, 195, 200, 205], fill=(100, 100, 100))
-            # ファイル名行
-            draw.rectangle([70, 215, 350, 225], fill=(150, 150, 150))
+            # より詳細な情報表示用の矩形
+            # フレーム番号
+            draw.rectangle([70, 140, 300, 150], fill=(50, 100, 150))
+            # 時間情報
+            draw.rectangle([70, 160, 250, 170], fill=(100, 100, 100))
+            # ファイル名
+            draw.rectangle([70, 180, 400, 190], fill=(150, 150, 150))
+            # ファイルサイズ情報
+            draw.rectangle([70, 200, 320, 210], fill=(120, 120, 120))
+            # 推定時間情報
+            draw.rectangle([70, 220, 380, 230], fill=(80, 80, 80))
+            # フレーム総数
+            draw.rectangle([70, 240, 280, 250], fill=(60, 60, 60))
             
             filename = f'frame_{i+1:03d}.jpg'
             filepath = os.path.join(output_dir, filename)

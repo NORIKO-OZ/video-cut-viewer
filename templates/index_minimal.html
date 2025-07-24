@@ -209,12 +209,32 @@
                     let message = `✅ ${data.message}<br>ファイル名: ${data.filename}`;
                     if (data.frames) {
                         message += `<br>抽出フレーム数: ${data.frames}個`;
+                        
+                        // フレームギャラリーを作成
                         if (data.preview_url) {
-                            message += `<br><img src="${data.preview_url}" style="max-width: 200px; margin-top: 10px; border-radius: 5px;">`;
+                            const basePath = data.preview_url.replace(/\/[^\/]+$/, '');
+                            message += '<br><div style="margin-top: 15px;"><strong>抽出されたフレーム:</strong></div>';
+                            message += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px;">';
+                            
+                            for (let i = 1; i <= data.frames; i++) {
+                                const frameUrl = `${basePath}/frame_${String(i).padStart(3, '0')}.jpg`;
+                                message += `
+                                    <div style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white;">
+                                        <img src="${frameUrl}" style="width: 100%; height: 120px; object-fit: cover;" 
+                                             onclick="openFrameModal('${frameUrl}', ${i})" 
+                                             style="cursor: pointer;" 
+                                             title="クリックで拡大表示">
+                                        <div style="padding: 5px; font-size: 12px; text-align: center; color: #666;">
+                                            Frame ${i} (${(i-1)*5}秒)
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                            message += '</div>';
                         }
                     }
                     if (data.note) {
-                        message += `<br>${data.note}`;
+                        message += `<br><div style="margin-top: 10px; font-style: italic; color: #666;">${data.note}</div>`;
                     }
                     showResult(message, 'success');
                 } else {
@@ -233,6 +253,37 @@
             result.innerHTML = message;
             result.className = `result ${type}`;
             result.style.display = 'block';
+        }
+        
+        // フレーム拡大表示モーダル
+        function openFrameModal(frameUrl, frameNumber) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); z-index: 1000; display: flex;
+                align-items: center; justify-content: center; cursor: pointer;
+            `;
+            
+            const img = document.createElement('img');
+            img.src = frameUrl;
+            img.style.cssText = `
+                max-width: 90%; max-height: 90%; border-radius: 10px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            `;
+            
+            const info = document.createElement('div');
+            info.style.cssText = `
+                position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                background: rgba(255,255,255,0.9); padding: 10px 20px; border-radius: 20px;
+                font-weight: bold; color: #333;
+            `;
+            info.textContent = `Frame ${frameNumber} (${(frameNumber-1)*5}秒地点)`;
+            
+            modal.appendChild(img);
+            modal.appendChild(info);
+            document.body.appendChild(modal);
+            
+            modal.onclick = () => document.body.removeChild(modal);
         }
         
         // ヘルスチェック

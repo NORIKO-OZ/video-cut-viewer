@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Cut Viewer - Web版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+        
+        .status {
+            background: #e8f5e8;
+            color: #2d5a2d;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .upload-section {
+            background: #f9f9f9;
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px dashed #ddd;
+            margin-bottom: 30px;
+        }
+        
+        .upload-section h2 {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        input[type="file"] {
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .result.success {
+            background: #e8f5e8;
+            color: #2d5a2d;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .result.error {
+            background: #ffeaea;
+            color: #d63031;
+            border-left: 4px solid #ff4757;
+        }
+        
+        .features {
+            margin-top: 30px;
+            text-align: left;
+        }
+        
+        .features h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .features ul {
+            color: #666;
+            line-height: 1.8;
+        }
+        
+        .coming-soon {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border-left: 4px solid #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Video Cut Viewer</h1>
+        <p class="subtitle">動画シーン解析ツール - Web版</p>
+        
+        <div class="status">
+            ✅ アプリケーションが正常に動作しています！
+        </div>
+        
+        <div class="upload-section">
+            <h2>📁 動画ファイルをアップロード</h2>
+            <form id="uploadForm">
+                <input type="file" id="videoFile" name="video" accept="video/*" required>
+                <br><br>
+                <button type="submit" id="uploadBtn">🚀 アップロード</button>
+            </form>
+            
+            <div id="result" class="result"></div>
+        </div>
+        
+        <div class="coming-soon">
+            <h3>🚧 開発中の機能</h3>
+            <p>動画のシーン検出機能は現在開発中です。しばらくお待ちください。</p>
+        </div>
+        
+        <div class="features">
+            <h3>📋 予定されている機能</h3>
+            <ul>
+                <li>🎭 自動シーン検出</li>
+                <li>⏱️ 定間隔フレーム抽出</li>
+                <li>📸 シーンのサムネイル表示</li>
+                <li>▶️ シーンからの動画再生</li>
+                <li>💾 シーンデータのエクスポート</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('videoFile');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const result = document.getElementById('result');
+            
+            if (!fileInput.files[0]) {
+                showResult('動画ファイルを選択してください', 'error');
+                return;
+            }
+            
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '🔄 アップロード中...';
+            
+            const formData = new FormData();
+            formData.append('video', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult(`✅ ${data.message}<br>ファイル名: ${data.filename}<br>${data.note}`, 'success');
+                } else {
+                    showResult(`❌ ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ アップロードエラー: ${error.message}`, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '🚀 アップロード';
+            }
+        });
+        
+        function showResult(message, type) {
+            const result = document.getElementById('result');
+            result.innerHTML = message;
+            result.className = `result ${type}`;
+            result.style.display = 'block';
+        }
+        
+        // ヘルスチェック
+        fetch('/health')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Health check:', data);
+            })
+            .catch(error => {
+                console.error('Health check failed:', error);
+            });
+    </script>
+</body>
+</html>

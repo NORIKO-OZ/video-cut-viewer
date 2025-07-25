@@ -124,11 +124,13 @@ def upload():
         # 処理モードを取得
         mode = request.form.get('mode', 'interval')  # 'interval' or 'scene'
         interval = int(request.form.get('interval', 5))
+        sensitivity = float(request.form.get('sensitivity', 0.15))  # シーン検出の精度
         
         print(f"=== FORM DATA DEBUG ===")
         print(f"All form data: {dict(request.form)}")
         print(f"Processing mode: '{mode}' (type: {type(mode)})")
         print(f"Interval: {interval}")
+        print(f"Sensitivity: {sensitivity}")
         print(f"SceneDetect available: {SCENEDETECT_AVAILABLE}")
         print(f"=== END FORM DATA DEBUG ===")
         
@@ -144,7 +146,7 @@ def upload():
         if mode == 'scene':
             print("Using FFmpeg-based scene detection mode")
             try:
-                scene_result = extract_scenes_with_ffmpeg(filepath, scene_dir)
+                scene_result = extract_scenes_with_ffmpeg(filepath, scene_dir, sensitivity)
                 if scene_result:
                     # シーン検出成功 - フレーム情報を取得
                     if isinstance(scene_result, list) and len(scene_result) > 0:
@@ -468,7 +470,7 @@ def extract_scenes_with_detection(video_path, output_dir):
         traceback.print_exc()
         return []
 
-def extract_scenes_with_ffmpeg(video_path, output_dir):
+def extract_scenes_with_ffmpeg(video_path, output_dir, sensitivity=0.15):
     """FFmpegを使用した真のシーン検出"""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -497,10 +499,11 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
         print(f"Video duration: {duration:.2f} seconds")
         
         # FFmpegで真のシーン検出を実行
-        # より低い閾値でより多くのシーン変化を検出
+        # ユーザー指定の感度を使用
+        print(f"Using scene detection sensitivity: {sensitivity}")
         scene_cmd = [
             'ffmpeg', '-i', video_path,
-            '-vf', 'select=gt(scene\\,0.2),showinfo',
+            '-vf', f'select=gt(scene\\,{sensitivity}),showinfo',
             '-vsync', 'vfr',
             '-f', 'null', '-'
         ]

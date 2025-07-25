@@ -173,6 +173,15 @@
                     <div style="margin: 5px 0;">
                         <input type="radio" id="modeScene" name="mode" value="scene">
                         <label for="modeScene">🎬 自動シーン検出</label>
+                        <div style="margin-left: 20px; margin-top: 5px;">
+                            <label for="sensitivity">精度: </label>
+                            <select id="sensitivity" name="sensitivity" style="padding: 3px;">
+                                <option value="0.1">高精度（多めのシーン）</option>
+                                <option value="0.15" selected>標準</option>
+                                <option value="0.2">低精度（少ないシーン）</option>
+                                <option value="0.3">最低（主要シーンのみ）</option>
+                            </select>
+                        </div>
                         <div style="margin-left: 20px; font-size: 12px; color: #666;">
                             内容変化に基づいて自動的にシーンを検出
                         </div>
@@ -236,6 +245,10 @@
                 const interval = document.getElementById('interval').value;
                 formData.append('interval', interval);
                 console.log('Selected interval:', interval); // デバッグ用
+            } else if (mode === 'scene') {
+                const sensitivity = document.getElementById('sensitivity').value;
+                formData.append('sensitivity', sensitivity);
+                console.log('Selected sensitivity:', sensitivity); // デバッグ用
             }
             
             // デバッグ: FormDataの内容を確認
@@ -275,7 +288,13 @@
                                 // 時間表示の決定
                                 let timeDisplay;
                                 if (isSceneDetection) {
-                                    timeDisplay = `Scene ${i}`;  // シーン検出の場合は具体的な時間は不明
+                                    // タイムスタンプデータがある場合は実際の時間を表示
+                                    if (data.frame_timestamps && data.frame_timestamps[i-1]) {
+                                        const frameInfo = data.frame_timestamps[i-1];
+                                        timeDisplay = `Scene ${i} (${frameInfo.time_display})`;
+                                    } else {
+                                        timeDisplay = `Scene ${i}`;
+                                    }
                                 } else {
                                     // 定間隔の場合のみ計算
                                     const interval = data.processing_method.match(/(\d+)s/);

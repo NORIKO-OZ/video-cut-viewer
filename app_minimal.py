@@ -140,17 +140,30 @@ def upload():
         ffmpeg_status = check_ffmpeg_availability()
         
         # 処理モードに応じて実行
+        error_info = None
         if mode == 'scene':
             print("Using FFmpeg-based scene detection mode")
-            frames = extract_scenes_with_ffmpeg(filepath, scene_dir)
-            processing_method = 'intelligent scene extraction (FFmpeg-based)'
+            try:
+                frames = extract_scenes_with_ffmpeg(filepath, scene_dir)
+                if frames:
+                    processing_method = 'intelligent scene extraction (FFmpeg-based)'
+                else:
+                    print("Scene detection returned no frames, falling back to interval")
+                    frames = extract_frames_simple(filepath, scene_dir, interval)
+                    processing_method = f'interval extraction ({interval}s) - scene detection failed'
+                    error_info = 'Scene detection returned no frames'
+            except Exception as e:
+                print(f"Scene detection failed with exception: {e}")
+                frames = extract_frames_simple(filepath, scene_dir, interval)
+                processing_method = f'interval extraction ({interval}s) - scene detection error'
+                error_info = f'Scene detection error: {str(e)}'
         else:
             print(f"Using interval mode with {interval}s interval")
             frames = extract_frames_simple(filepath, scene_dir, interval)
             processing_method = f'interval extraction ({interval}s)'
         
         if frames:
-            return jsonify({
+            response_data = {
                 'message': f'Video processed successfully using {processing_method}',
                 'filename': file.filename,
                 'frames': len(frames),
@@ -158,7 +171,10 @@ def upload():
                 'processing_method': processing_method,
                 'requested_mode': mode,
                 'debug_info': format_debug_info(ffmpeg_status)
-            })
+            }
+            if error_info:
+                response_data['error_info'] = error_info
+            return jsonify(response_data)
         
         # FFmpegが失敗した場合、代替処理を試行
         frames = create_placeholder_frames(filepath, scene_dir, file.filename)

@@ -265,16 +265,32 @@
                             message += '<br><div style="margin-top: 15px;"><strong>抽出されたフレーム:</strong></div>';
                             message += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px;">';
                             
+                            // シーン検出の場合はscene_xxx.jpg、定間隔の場合はframe_xxx.jpg
+                            const isSceneDetection = data.processing_method && data.processing_method.includes('scene detection');
+                            const filePrefix = isSceneDetection ? 'scene' : 'frame';
+                            
                             for (let i = 1; i <= data.frames; i++) {
-                                const frameUrl = `${basePath}/frame_${String(i).padStart(3, '0')}.jpg`;
+                                const frameUrl = `${basePath}/${filePrefix}_${String(i).padStart(3, '0')}.jpg`;
+                                
+                                // 時間表示の決定
+                                let timeDisplay;
+                                if (isSceneDetection) {
+                                    timeDisplay = `Scene ${i}`;  // シーン検出の場合は具体的な時間は不明
+                                } else {
+                                    // 定間隔の場合のみ計算
+                                    const interval = data.processing_method.match(/(\d+)s/);
+                                    const intervalSec = interval ? parseInt(interval[1]) : 5;
+                                    timeDisplay = `${(i-1) * intervalSec}秒`;
+                                }
+                                
                                 message += `
                                     <div style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white;">
                                         <img src="${frameUrl}" style="width: 100%; height: 120px; object-fit: cover;" 
-                                             onclick="openFrameModal('${frameUrl}', ${i})" 
+                                             onclick="openFrameModal('${frameUrl}', ${i}, '${timeDisplay}')" 
                                              style="cursor: pointer;" 
                                              title="クリックで拡大表示">
                                         <div style="padding: 5px; font-size: 12px; text-align: center; color: #666;">
-                                            Frame ${i} (${(i-1)*5}秒)
+                                            ${timeDisplay}
                                         </div>
                                     </div>
                                 `;
@@ -311,7 +327,7 @@
         }
         
         // フレーム拡大表示モーダル
-        function openFrameModal(frameUrl, frameNumber) {
+        function openFrameModal(frameUrl, frameNumber, timeDisplay) {
             const modal = document.createElement('div');
             modal.style.cssText = `
                 position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -332,7 +348,7 @@
                 background: rgba(255,255,255,0.9); padding: 10px 20px; border-radius: 20px;
                 font-weight: bold; color: #333;
             `;
-            info.textContent = `Frame ${frameNumber} (${(frameNumber-1)*5}秒地点)`;
+            info.textContent = timeDisplay || `Frame ${frameNumber}`;
             
             modal.appendChild(img);
             modal.appendChild(info);

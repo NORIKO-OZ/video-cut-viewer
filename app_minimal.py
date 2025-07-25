@@ -144,12 +144,23 @@ def upload():
         if mode == 'scene':
             print("Using FFmpeg-based scene detection mode")
             try:
-                frames = extract_scenes_with_ffmpeg(filepath, scene_dir)
-                if frames:
+                scene_result = extract_scenes_with_ffmpeg(filepath, scene_dir)
+                if scene_result:
+                    # シーン検出成功 - フレーム情報を取得
+                    if isinstance(scene_result, list) and len(scene_result) > 0:
+                        if isinstance(scene_result[0], dict):
+                            # 新しい形式：タイムスタンプ付き
+                            frames = [item['filename'] for item in scene_result]
+                            frame_timestamps = scene_result
+                        else:
+                            # 旧形式：ファイル名のみ
+                            frames = scene_result
+                            frame_timestamps = None
                     processing_method = 'true scene detection (FFmpeg-based)'
                 else:
                     print("Scene detection returned no frames, falling back to interval")
                     frames = extract_frames_simple(filepath, scene_dir, interval)
+                    frame_timestamps = None
                     processing_method = f'interval extraction ({interval}s) - scene detection failed'
                     error_info = 'Scene detection returned no frames'
             except Exception as e:
@@ -160,6 +171,7 @@ def upload():
         else:
             print(f"Using interval mode with {interval}s interval")
             frames = extract_frames_simple(filepath, scene_dir, interval)
+            frame_timestamps = None
             processing_method = f'interval extraction ({interval}s)'
         
         if frames:
@@ -172,6 +184,8 @@ def upload():
                 'requested_mode': mode,
                 'debug_info': format_debug_info(ffmpeg_status)
             }
+            if frame_timestamps:
+                response_data['frame_timestamps'] = frame_timestamps
             if error_info:
                 response_data['error_info'] = error_info
             return jsonify(response_data)
@@ -570,7 +584,15 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
                 continue
         
         print(f"Successfully extracted {len(frames)} TRUE scene frames")
-        return frames
+        # フレーム情報とタイムスタンプを含む辞書として返す
+        frame_info = []
+        for i, (frame, timestamp) in enumerate(zip(frames, timestamps[:len(frames)])):
+            frame_info.append({
+                'filename': frame,
+                'timestamp': timestamp,
+                'time_display': f"{int(timestamp//60):02d}:{int(timestamp%60):02d}"
+            })
+        return frame_info
         
     except Exception as e:
         print(f"TRUE scene detection failed: {e}")

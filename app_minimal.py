@@ -143,7 +143,7 @@ def upload():
         if mode == 'scene':
             print("Using FFmpeg-based scene detection mode")
             frames = extract_scenes_with_ffmpeg(filepath, scene_dir)
-            processing_method = 'scene detection (FFmpeg-based)'
+            processing_method = 'intelligent scene extraction (FFmpeg-based)'
         else:
             print(f"Using interval mode with {interval}s interval")
             frames = extract_frames_simple(filepath, scene_dir, interval)
@@ -439,7 +439,7 @@ def extract_scenes_with_detection(video_path, output_dir):
         return []
 
 def extract_scenes_with_ffmpeg(video_path, output_dir):
-    """FFmpegのシーン検出フィルターを使用したシーン抽出"""
+    """FFmpegを使用したシンプルなシーン抽出"""
     os.makedirs(output_dir, exist_ok=True)
     
     try:
@@ -449,73 +449,51 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
         if os.path.exists(video_path):
             print(f"Video file size: {os.path.getsize(video_path)} bytes")
         
-        # FFmpegのsceneフィルターを使用してシーン変化点を検出
-        # まず動画の長さを取得
+        # 動画の基本情報を取得
         probe_cmd = ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', video_path]
         print(f"Running probe command: {' '.join(probe_cmd)}")
         duration_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
         
         if duration_result.returncode != 0:
             print(f"Failed to get video duration - return code: {duration_result.returncode}")
-            print(f"ffprobe stdout: {duration_result.stdout}")
             print(f"ffprobe stderr: {duration_result.stderr}")
             return []
         
         try:
             duration = float(duration_result.stdout.strip())
         except ValueError:
-            print("Invalid duration format")
+            print(f"Invalid duration format: '{duration_result.stdout.strip()}'")
             return []
         
         print(f"Video duration: {duration:.2f} seconds")
         
-        # シーン検出 - 閾値0.3で設定
-        scene_cmd = [
-            'ffmpeg', '-i', video_path,
-            '-vf', 'select=gt(scene\\,0.3),showinfo',
-            '-vsync', 'vfr',
-            '-f', 'null', '-'
-        ]
-        
-        print(f"Running scene detection command: {' '.join(scene_cmd)}")
-        result = subprocess.run(scene_cmd, capture_output=True, text=True, timeout=120)
-        print(f"Scene detection return code: {result.returncode}")
-        print(f"Scene detection stderr length: {len(result.stderr)}")
-        if len(result.stderr) > 1000:
-            print(f"Scene detection stderr (first 1000 chars): {result.stderr[:1000]}")
+        # シンプルなアプローチ: 動画の長さに基づいて時間を決定
+        # 短い動画: より頻繁、長い動画: より間隔を空ける
+        if duration <= 30:
+            interval = 3  # 30秒以下: 3秒間隔
+        elif duration <= 120:
+            interval = 8  # 2分以下: 8秒間隔
+        elif duration <= 300:
+            interval = 15  # 5分以下: 15秒間隔
         else:
-            print(f"Scene detection stderr: {result.stderr}")
+            interval = 20  # 5分以上: 20秒間隔
         
-        # showinfoの出力からタイムスタンプを抽出
+        # タイムスタンプを生成
         timestamps = []
-        for line in result.stderr.split('\n'):
-            if 'pts_time:' in line:
-                try:
-                    # pts_time:12.345 の形式から時間を抽出
-                    pts_start = line.find('pts_time:') + 9
-                    pts_end = line.find(' ', pts_start)
-                    if pts_end == -1:
-                        pts_end = len(line)
-                    timestamp = float(line[pts_start:pts_end])
-                    timestamps.append(timestamp)
-                except (ValueError, IndexError):
-                    continue
+        current_time = 0
+        while current_time < duration and len(timestamps) < 20:  # 最大20フレーム
+            timestamps.append(current_time)
+            current_time += interval
         
-        # 開始フレームも追加
-        if 0.0 not in timestamps:
-            timestamps.insert(0, 0.0)
+        # 最後のフレームも追加（動画の最後付近）
+        if duration > interval and (duration - timestamps[-1]) > interval / 2:
+            timestamps.append(duration - 2)  # 最後の2秒前
         
-        timestamps.sort()
-        print(f"Detected {len(timestamps)} scene changes at: {timestamps}")
-        
-        if len(timestamps) == 0:
-            print("No scenes detected, creating frames at regular intervals")
-            # フォールバック：10秒間隔で作成
-            timestamps = [i * 10 for i in range(int(duration // 10) + 1)]
+        print(f"Generated {len(timestamps)} timestamps at {interval}s intervals: {timestamps}")
         
         # 各タイムスタンプでフレームを抽出
         frames = []
-        for i, timestamp in enumerate(timestamps[:15]):  # 最大15フレームに制限
+        for i, timestamp in enumerate(timestamps):
             try:
                 output_filename = f'scene_{i+1:03d}.jpg'
                 output_path = os.path.join(output_dir, output_filename)
@@ -526,11 +504,12 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
                     output_path
                 ]
                 
+                print(f"Extracting frame {i+1} at {timestamp:.2f}s")
                 frame_result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                 
                 if frame_result.returncode == 0 and os.path.exists(output_path):
                     frames.append(output_filename)
-                    print(f"Extracted scene {i+1} at {timestamp:.2f}s")
+                    print(f"Successfully extracted scene {i+1} at {timestamp:.2f}s")
                 else:
                     print(f"Failed to extract scene {i+1}: {frame_result.stderr}")
                     
@@ -538,11 +517,11 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
                 print(f"Error extracting scene {i+1}: {e}")
                 continue
         
-        print(f"Successfully extracted {len(frames)} scene frames using FFmpeg")
+        print(f"Successfully extracted {len(frames)} scene frames using intelligent intervals")
         return frames
         
     except Exception as e:
-        print(f"FFmpeg scene detection failed: {e}")
+        print(f"FFmpeg scene extraction failed: {e}")
         import traceback
         traceback.print_exc()
         return []

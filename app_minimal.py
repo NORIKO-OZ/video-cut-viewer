@@ -616,7 +616,49 @@ def create_placeholder_frames(video_path, output_dir, original_filename):
 
 @app.route('/scenes/<path:filename>')
 def serve_scene(filename):
+    full_path = os.path.join(SCENES_FOLDER, filename)
+    print(f"Attempting to serve: {full_path}")
+    print(f"File exists: {os.path.exists(full_path)}")
+    if os.path.exists(full_path):
+        print(f"File size: {os.path.getsize(full_path)} bytes")
+    else:
+        print(f"Directory exists: {os.path.exists(os.path.dirname(full_path))}")
+        if os.path.exists(os.path.dirname(full_path)):
+            print(f"Directory contents: {os.listdir(os.path.dirname(full_path))}")
+    
+    if not os.path.exists(full_path):
+        return f"File not found: {filename}", 404
+    
     return send_from_directory(SCENES_FOLDER, filename)
+
+@app.route('/debug-files/<path:folder_id>')
+def debug_files(folder_id):
+    """特定フォルダのファイル状況をデバッグ"""
+    folder_path = os.path.join(SCENES_FOLDER, folder_id)
+    
+    result = {
+        'folder_id': folder_id,
+        'scenes_folder': SCENES_FOLDER,
+        'full_folder_path': folder_path,
+        'folder_exists': os.path.exists(folder_path),
+        'base_dir_exists': os.path.exists(SCENES_FOLDER),
+    }
+    
+    if os.path.exists(SCENES_FOLDER):
+        result['scenes_folder_contents'] = os.listdir(SCENES_FOLDER)
+    
+    if os.path.exists(folder_path):
+        files = os.listdir(folder_path)
+        result['folder_contents'] = files
+        result['file_details'] = {}
+        for file in files:
+            file_path = os.path.join(folder_path, file)
+            result['file_details'][file] = {
+                'size': os.path.getsize(file_path),
+                'exists': os.path.exists(file_path)
+            }
+    
+    return jsonify(result)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

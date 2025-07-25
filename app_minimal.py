@@ -154,6 +154,9 @@ def upload():
                             # 新しい形式：タイムスタンプ付き
                             frames = [item['filename'] for item in scene_result]
                             frame_timestamps = scene_result
+                            print(f"DEBUG: Scene detection successful with timestamps:")
+                            for i, item in enumerate(scene_result):
+                                print(f"  {i+1}: {item['filename']} -> {item['timestamp']:.2f}s ({item['time_display']})")
                         else:
                             # 旧形式：ファイル名のみ
                             frames = scene_result
@@ -566,9 +569,12 @@ def extract_scenes_with_ffmpeg(video_path, output_dir, sensitivity=0.15):
         
         # 各タイムスタンプでフレームを抽出
         frames = []
+        successful_timestamps = []  # 成功したフレーム抽出のタイムスタンプを記録
+        frame_counter = 1
+        
         for i, timestamp in enumerate(timestamps):
             try:
-                output_filename = f'scene_{i+1:03d}.jpg'
+                output_filename = f'scene_{frame_counter:03d}.jpg'
                 output_path = os.path.join(output_dir, output_filename)
                 
                 cmd = [
@@ -581,18 +587,22 @@ def extract_scenes_with_ffmpeg(video_path, output_dir, sensitivity=0.15):
                 
                 if frame_result.returncode == 0 and os.path.exists(output_path):
                     frames.append(output_filename)
-                    print(f"Extracted scene {i+1} at {timestamp:.2f}s")
+                    successful_timestamps.append(timestamp)
+                    print(f"Extracted scene {frame_counter} at {timestamp:.2f}s")
+                    frame_counter += 1
                 else:
-                    print(f"Failed to extract scene {i+1}: {frame_result.stderr}")
+                    print(f"Failed to extract scene at {timestamp:.2f}s: {frame_result.stderr}")
                     
             except Exception as e:
-                print(f"Error extracting scene {i+1}: {e}")
+                print(f"Error extracting scene at {timestamp:.2f}s: {e}")
                 continue
         
         print(f"Successfully extracted {len(frames)} TRUE scene frames")
+        print(f"Frame-timestamp pairs: {list(zip(frames, successful_timestamps))}")
+        
         # フレーム情報とタイムスタンプを含む辞書として返す
         frame_info = []
-        for i, (frame, timestamp) in enumerate(zip(frames, timestamps[:len(frames)])):
+        for frame, timestamp in zip(frames, successful_timestamps):
             frame_info.append({
                 'filename': frame,
                 'timestamp': timestamp,

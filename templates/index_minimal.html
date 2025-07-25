@@ -312,11 +312,18 @@
                                         timeDisplay = `Scene ${i}`;
                                     }
                                 } else {
-                                    // 定間隔の場合のみ計算
-                                    const interval = data.processing_method.match(/(\d+)s/);
-                                    const intervalSec = interval ? parseInt(interval[1]) : 5;
-                                    timestamp = (i-1) * intervalSec;
-                                    timeDisplay = `${timestamp}秒`;
+                                    // 定間隔モード
+                                    if (data.frame_timestamps && data.frame_timestamps[i-1]) {
+                                        const frameInfo = data.frame_timestamps[i-1];
+                                        timestamp = frameInfo.timestamp;
+                                        timeDisplay = `${timestamp}秒 (${frameInfo.time_display})`;
+                                    } else {
+                                        // フォールバック：計算による推定
+                                        const interval = data.processing_method.match(/(\d+)s/);
+                                        const intervalSec = interval ? parseInt(interval[1]) : 5;
+                                        timestamp = (i-1) * intervalSec;
+                                        timeDisplay = `${timestamp}秒`;
+                                    }
                                 }
                                 
                                 const jumpButton = timestamp !== null ? 

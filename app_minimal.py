@@ -164,19 +164,52 @@ def upload():
                     processing_method = 'true scene detection (FFmpeg-based)'
                 else:
                     print("Scene detection returned no frames, falling back to interval")
-                    frames = extract_frames_simple(filepath, scene_dir, interval)
-                    frame_timestamps = None
+                    fallback_result = extract_frames_simple(filepath, scene_dir, interval)
+                    if fallback_result and isinstance(fallback_result, list) and len(fallback_result) > 0:
+                        if isinstance(fallback_result[0], dict):
+                            frames = [item['filename'] for item in fallback_result]
+                            frame_timestamps = fallback_result
+                        else:
+                            frames = fallback_result
+                            frame_timestamps = None
+                    else:
+                        frames = []
+                        frame_timestamps = None
                     processing_method = f'interval extraction ({interval}s) - scene detection failed'
                     error_info = 'Scene detection returned no frames'
             except Exception as e:
                 print(f"Scene detection failed with exception: {e}")
-                frames = extract_frames_simple(filepath, scene_dir, interval)
+                fallback_result = extract_frames_simple(filepath, scene_dir, interval)
+                if fallback_result and isinstance(fallback_result, list) and len(fallback_result) > 0:
+                    if isinstance(fallback_result[0], dict):
+                        frames = [item['filename'] for item in fallback_result]
+                        frame_timestamps = fallback_result
+                    else:
+                        frames = fallback_result
+                        frame_timestamps = None
+                else:
+                    frames = []
+                    frame_timestamps = None
                 processing_method = f'interval extraction ({interval}s) - scene detection error'
                 error_info = f'Scene detection error: {str(e)}'
         else:
             print(f"Using interval mode with {interval}s interval")
-            frames = extract_frames_simple(filepath, scene_dir, interval)
-            frame_timestamps = None
+            interval_result = extract_frames_simple(filepath, scene_dir, interval)
+            if interval_result and isinstance(interval_result, list) and len(interval_result) > 0:
+                if isinstance(interval_result[0], dict):
+                    # 新しい形式：タイムスタンプ付き
+                    frames = [item['filename'] for item in interval_result]
+                    frame_timestamps = interval_result
+                    print(f"DEBUG: Interval extraction successful with timestamps:")
+                    for i, item in enumerate(interval_result):
+                        print(f"  {i+1}: {item['filename']} -> {item['timestamp']:.2f}s ({item['time_display']})")
+                else:
+                    # 旧形式：ファイル名のみ（フォールバック）
+                    frames = interval_result
+                    frame_timestamps = None
+            else:
+                frames = []
+                frame_timestamps = None
             processing_method = f'interval extraction ({interval}s)'
         
         if frames:
@@ -374,7 +407,22 @@ def extract_frames_with_ffmpeg_python(video_path, output_dir, interval_sec=5):
         # 生成されたファイルを取得
         files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
         print(f"Successfully extracted {len(files)} frames using ffmpeg-python")
-        return files
+        
+        # タイムスタンプ情報付きで返す
+        frame_info = []
+        for i, filename in enumerate(files):
+            timestamp = i * interval_sec
+            frame_info.append({
+                'filename': filename,
+                'timestamp': timestamp,
+                'time_display': f"{int(timestamp//60):02d}:{int(timestamp%60):02d}"
+            })
+        
+        print(f"DEBUG: Interval extraction with timestamps:")
+        for item in frame_info:
+            print(f"  {item['filename']} -> {item['timestamp']:.2f}s ({item['time_display']})")
+        
+        return frame_info
         
     except Exception as e:
         print(f"ffmpeg-python extraction error: {e}")
@@ -397,7 +445,22 @@ def extract_frames_with_subprocess(video_path, output_dir, interval_sec=5):
         if result.returncode == 0:
             files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
             print(f"Successfully extracted {len(files)} frames using subprocess")
-            return files
+            
+            # タイムスタンプ情報付きで返す
+            frame_info = []
+            for i, filename in enumerate(files):
+                timestamp = i * interval_sec
+                frame_info.append({
+                    'filename': filename,
+                    'timestamp': timestamp,
+                    'time_display': f"{int(timestamp//60):02d}:{int(timestamp%60):02d}"
+                })
+            
+            print(f"DEBUG: Subprocess interval extraction with timestamps:")
+            for item in frame_info:
+                print(f"  {item['filename']} -> {item['timestamp']:.2f}s ({item['time_display']})")
+            
+            return frame_info
         else:
             print(f"FFmpeg subprocess error: {result.stderr}")
             return []

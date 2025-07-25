@@ -180,6 +180,7 @@ def upload():
             response_data = {
                 'message': f'Video processed successfully using {processing_method}',
                 'filename': file.filename,
+                'video_file': filename,  # アップロードされた動画ファイル名
                 'frames': len(frames),
                 'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
                 'processing_method': processing_method,
@@ -199,6 +200,7 @@ def upload():
             return jsonify({
                 'message': 'Video uploaded successfully (using placeholder processing)',
                 'filename': file.filename,
+                'video_file': filename,
                 'frames': len(frames),
                 'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
                 'note': 'Using placeholder frame generation. Real video processing failed.',
@@ -208,6 +210,7 @@ def upload():
             return jsonify({
                 'message': 'Video uploaded but processing failed',
                 'filename': file.filename,
+                'video_file': filename,
                 'note': 'Video processing is not available on this platform',
                 'debug_info': format_debug_info(ffmpeg_status)
             })
@@ -691,6 +694,18 @@ def serve_scene(filename):
         return f"File not found: {filename}", 404
     
     return send_from_directory(SCENES_FOLDER, filename)
+
+@app.route('/videos/<path:filename>')
+def serve_video(filename):
+    """アップロードされた動画ファイルを配信"""
+    full_path = os.path.join(UPLOAD_FOLDER, filename)
+    print(f"Attempting to serve video: {full_path}")
+    print(f"Video file exists: {os.path.exists(full_path)}")
+    
+    if not os.path.exists(full_path):
+        return f"Video not found: {filename}", 404
+    
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 @app.route('/debug-files/<path:folder_id>')
 def debug_files(folder_id):

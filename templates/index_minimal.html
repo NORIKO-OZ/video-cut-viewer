@@ -198,19 +198,21 @@
             <h3>🎯 現在利用可能な機能</h3>
             <p>✅ 動画アップロード機能<br>
             ✅ 定間隔フレーム抽出（3〜30秒）<br>
-            ✅ 自動シーン検出機能<br>
+            ✅ 自動シーン検出機能（精度調整可能）<br>
             ✅ フレームギャラリー表示<br>
-            ✅ フレーム拡大表示</p>
+            ✅ フレーム拡大表示<br>
+            ✅ 動画プレイヤー機能<br>
+            ✅ サムネイルから動画ジャンプ</p>
         </div>
         
         <div class="features">
             <h3>📋 予定されている機能</h3>
             <ul>
-                <li>🎭 自動シーン検出</li>
-                <li>⏱️ 定間隔フレーム抽出</li>
-                <li>📸 シーンのサムネイル表示</li>
-                <li>▶️ シーンからの動画再生</li>
-                <li>💾 シーンデータのエクスポート</li>
+                <li>💾 シーンデータのエクスポート（JSON/CSV）</li>
+                <li>🎨 シーンの手動編集機能</li>
+                <li>📊 動画統計情報表示</li>
+                <li>🔄 複数動画の一括処理</li>
+                <li>🎪 カスタマイズ可能なプレイヤー</li>
             </ul>
         </div>
     </div>
@@ -269,6 +271,18 @@
                     if (data.requested_mode && data.processing_method) {
                         message += `<br><strong>要求モード:</strong> ${data.requested_mode} → <strong>実行:</strong> ${data.processing_method}`;
                     }
+                    
+                    // 動画プレイヤーを追加
+                    if (data.video_file) {
+                        message += `<br><div style="margin-top: 15px;"><strong>動画プレイヤー:</strong></div>`;
+                        message += `<div style="margin-top: 10px; text-align: center;">
+                            <video id="mainVideo" controls style="width: 100%; max-width: 600px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                                <source src="/videos/${data.video_file}" type="video/mp4">
+                                お使いのブラウザは動画再生に対応していません。
+                            </video>
+                        </div>`;
+                    }
+                    
                     if (data.frames) {
                         message += `<br>抽出フレーム数: ${data.frames}個`;
                         
@@ -287,11 +301,13 @@
                                 
                                 // 時間表示の決定
                                 let timeDisplay;
+                                let timestamp = null;
                                 if (isSceneDetection) {
                                     // タイムスタンプデータがある場合は実際の時間を表示
                                     if (data.frame_timestamps && data.frame_timestamps[i-1]) {
                                         const frameInfo = data.frame_timestamps[i-1];
                                         timeDisplay = `Scene ${i} (${frameInfo.time_display})`;
+                                        timestamp = frameInfo.timestamp;
                                     } else {
                                         timeDisplay = `Scene ${i}`;
                                     }
@@ -299,15 +315,20 @@
                                     // 定間隔の場合のみ計算
                                     const interval = data.processing_method.match(/(\d+)s/);
                                     const intervalSec = interval ? parseInt(interval[1]) : 5;
-                                    timeDisplay = `${(i-1) * intervalSec}秒`;
+                                    timestamp = (i-1) * intervalSec;
+                                    timeDisplay = `${timestamp}秒`;
                                 }
+                                
+                                const clickAction = timestamp !== null ? 
+                                    `jumpToTime(${timestamp}); openFrameModal('${frameUrl}', ${i}, '${timeDisplay}')` :
+                                    `openFrameModal('${frameUrl}', ${i}, '${timeDisplay}')`;
                                 
                                 message += `
                                     <div style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white;">
                                         <img src="${frameUrl}" style="width: 100%; height: 120px; object-fit: cover;" 
-                                             onclick="openFrameModal('${frameUrl}', ${i}, '${timeDisplay}')" 
+                                             onclick="${clickAction}" 
                                              style="cursor: pointer;" 
-                                             title="クリックで拡大表示">
+                                             title="クリックで動画ジャンプ＆拡大表示">
                                         <div style="padding: 5px; font-size: 12px; text-align: center; color: #666;">
                                             ${timeDisplay}
                                         </div>
@@ -345,6 +366,20 @@
             result.style.display = 'block';
         }
         
+        // 動画の特定時間にジャンプ
+        function jumpToTime(seconds) {
+            const video = document.getElementById('mainVideo');
+            if (video) {
+                video.currentTime = seconds;
+                video.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // 一時的にハイライト
+                video.style.boxShadow = '0 0 20px #4CAF50';
+                setTimeout(() => {
+                    video.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                }, 1000);
+            }
+        }
+        
         // フレーム拡大表示モーダル
         function openFrameModal(frameUrl, frameNumber, timeDisplay) {
             const modal = document.createElement('div');
@@ -354,26 +389,46 @@
                 align-items: center; justify-content: center; cursor: pointer;
             `;
             
+            const container = document.createElement('div');
+            container.style.cssText = `
+                position: relative; max-width: 90%; max-height: 90%;
+                display: flex; flex-direction: column; align-items: center;
+            `;
+            
             const img = document.createElement('img');
             img.src = frameUrl;
             img.style.cssText = `
-                max-width: 90%; max-height: 90%; border-radius: 10px;
+                max-width: 100%; max-height: 80vh; border-radius: 10px;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             `;
             
             const info = document.createElement('div');
             info.style.cssText = `
-                position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-                background: rgba(255,255,255,0.9); padding: 10px 20px; border-radius: 20px;
-                font-weight: bold; color: #333;
+                margin-top: 15px; background: rgba(255,255,255,0.9); 
+                padding: 10px 20px; border-radius: 20px;
+                font-weight: bold; color: #333; text-align: center;
             `;
             info.textContent = timeDisplay || `Frame ${frameNumber}`;
             
-            modal.appendChild(img);
-            modal.appendChild(info);
+            container.appendChild(img);
+            container.appendChild(info);
+            modal.appendChild(container);
             document.body.appendChild(modal);
             
-            modal.onclick = () => document.body.removeChild(modal);
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            };
+            
+            // ESCキーでも閉じる
+            const closeOnEscape = (e) => {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(modal);
+                    document.removeEventListener('keydown', closeOnEscape);
+                }
+            };
+            document.addEventListener('keydown', closeOnEscape);
         }
         
         // ヘルスチェック

@@ -376,17 +376,24 @@
     <script>
         // 画像拡大モーダル機能
         function uploadImage(imageUrl, timeStr) {
-            console.log('Opening image modal:', imageUrl);
+            console.log('uploadImage called with:', imageUrl, timeStr);
             
             const modal = document.getElementById('imageModal');
             const modalImage = document.getElementById('modalImage');
             const modalInfo = document.getElementById('modalInfo');
             
-            modalImage.src = imageUrl;
-            modalInfo.textContent = timeStr ? `時刻: ${timeStr}` : '';
+            console.log('Modal elements:', modal, modalImage, modalInfo);
             
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden'; // スクロールを無効化
+            if (modal && modalImage && modalInfo) {
+                modalImage.src = imageUrl;
+                modalInfo.textContent = timeStr ? `時刻: ${timeStr}` : '';
+                
+                modal.classList.add('show');
+                document.body.style.overflow = 'hidden'; // スクロールを無効化
+                console.log('Modal should be showing now');
+            } else {
+                console.error('Modal elements not found!');
+            }
         }
         
         // モーダルを閉じる
@@ -465,10 +472,15 @@
             
             // サムネイル画像にクリックイベントを設定
             const thumbnailImages = document.querySelectorAll('.thumbnail-image');
-            thumbnailImages.forEach(img => {
-                img.addEventListener('click', function() {
+            console.log('Found thumbnail images:', thumbnailImages.length);
+            
+            thumbnailImages.forEach((img, index) => {
+                console.log(`Setting up click for image ${index}:`, img);
+                img.addEventListener('click', function(event) {
+                    console.log('Thumbnail clicked!', this);
                     const imageUrl = this.dataset.imageUrl;
                     const timeStr = this.dataset.timeStr;
+                    console.log('Image URL:', imageUrl, 'Time:', timeStr);
                     uploadImage(imageUrl, timeStr);
                 });
             });

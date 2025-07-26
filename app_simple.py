@@ -30,6 +30,7 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
     
     try:
         # FFmpegでフレームを抽出
+        # 0秒から開始して定間隔でフレームを抽出
         cmd = [
             'ffmpeg', '-i', video_path,
             '-vf', f'fps=1/{interval_sec}',
@@ -48,13 +49,14 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
         timestamps = []
         
         for i, filename in enumerate(files):
+            # 定間隔モードでは、最初のフレームは0秒、その後interval_sec間隔
             timestamp_seconds = i * interval_sec
             hours = int(timestamp_seconds // 3600)
             minutes = int((timestamp_seconds % 3600) // 60)
             seconds = int(timestamp_seconds % 60)
-            # より正確な時間表示のため、実際の秒数を保持
             timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
             timestamps.append(timestamp)
+            print(f"Frame {i+1}: {filename} -> {timestamp} ({timestamp_seconds}秒)")
             
         return list(zip(files, timestamps))
         

@@ -469,32 +469,32 @@
                     timeDisplay.textContent = `${current} / ${duration}`;
                 }
                 
-                // 現在の再生位置に最も近いシーンをハイライト
+                // 現在の再生位置に最適なシーンをハイライト
                 function highlightCurrentScene() {
                     const currentTime = video.currentTime;
                     const sceneItems = document.querySelectorAll('.scene-item');
-                    let closestScene = null;
-                    let closestDiff = Infinity;
+                    let activeScene = null;
                     
-                    sceneItems.forEach(item => {
-                        if (item.dataset && item.dataset.time) {
-                            const timeStr = item.dataset.time;
-                            const sceneSeconds = timeStringToSeconds(timeStr);
-                            const diff = Math.abs(sceneSeconds - currentTime);
-                            
-                            if (diff < closestDiff) {
-                                closestDiff = diff;
-                                closestScene = item;
-                            }
+                    // シーンを時刻順に並べ替えて、現在時刻より前の最新シーンを探す
+                    const scenes = Array.from(sceneItems).map(item => ({
+                        element: item,
+                        time: timeStringToSeconds(item.dataset.time || '00:00:00.000')
+                    })).sort((a, b) => a.time - b.time);
+                    
+                    // 現在時刻以前の最後のシーンを見つける
+                    for (let i = scenes.length - 1; i >= 0; i--) {
+                        if (scenes[i].time <= currentTime + 0.1) { // 0.1秒の余裕
+                            activeScene = scenes[i].element;
+                            break;
                         }
-                    });
+                    }
                     
                     // 全てのアクティブクラスを削除
                     sceneItems.forEach(item => item.classList.remove('active'));
                     
-                    // 最も近いシーンをハイライト（5秒以内の場合のみ）
-                    if (closestScene && closestDiff <= 5) {
-                        closestScene.classList.add('active');
+                    // アクティブシーンをハイライト
+                    if (activeScene) {
+                        activeScene.classList.add('active');
                     }
                 }
                 

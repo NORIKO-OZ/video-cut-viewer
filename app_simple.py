@@ -262,91 +262,112 @@ def get_progress(session_id):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        if 'video' not in request.files:
-            flash('動画ファイルを選択してください')
-            return redirect(request.url)
+        try:
+            print(f"POST request received. Files: {list(request.files.keys())}")
+            print(f"Form data: {dict(request.form)}")
+            
+            if 'video' not in request.files:
+                print("No video file in request")
+                flash('動画ファイルを選択してください')
+                return redirect(request.url), 400
         
-        file = request.files['video']
-        if file.filename == '':
-            flash('動画ファイルを選択してください')
-            return redirect(request.url)
+            file = request.files['video']
+            print(f"Video file: {file.filename}")
+            
+            if file.filename == '':
+                print("Empty filename")
+                flash('動画ファイルを選択してください')
+                return redirect(request.url), 400
         
-        if file:
-            # セッションIDを取得または生成
-            session_id = request.form.get('session_id')
-            if not session_id:
-                session_id = str(uuid.uuid4())
-            update_progress(session_id, 5, 'uploading', 'ファイルをアップロード中...', 90)
+            if file:
+                # セッションIDを取得または生成
+                session_id = request.form.get('session_id')
+                if not session_id:
+                    session_id = str(uuid.uuid4())
+                print(f"Session ID: {session_id}")
+                update_progress(session_id, 5, 'uploading', 'ファイルをアップロード中...', 90)
             
             # ファイル保存
             filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
             filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            update_progress(session_id, 8, 'uploaded', 'アップロード完了', 80)
+                file.save(filepath)
+                update_progress(session_id, 8, 'uploaded', 'アップロード完了', 80)
             
-            # 処理モードとパラメータ取得
-            mode = request.form.get('mode', 'interval')
-            interval = int(request.form.get('interval', 5))
+                # 処理モードとパラメータ取得
+                mode = request.form.get('mode', 'interval')
+                interval = int(request.form.get('interval', 5))
             
-            filename_no_ext = os.path.splitext(filename)[0]
-            scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
+                filename_no_ext = os.path.splitext(filename)[0]
+                scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
             
-            print(f"処理モード: {mode}")
-            print(f"間隔: {interval}秒")
+                print(f"処理モード: {mode}")
+                print(f"間隔: {interval}秒")
             
-            # フレーム抽出（FFmpegまたはシンプルな方法を使用）
-            try:
-                print(f"Starting frame extraction for: {filename}")
-                print(f"File size: {os.path.getsize(filepath)} bytes")
+                # フレーム抽出（FFmpegまたはシンプルな方法を使用）
+                try:
+                    print(f"Starting frame extraction for: {filename}")
+                    print(f"File size: {os.path.getsize(filepath)} bytes")
                 
-                if mode == 'scene':
-                    frame_data = extract_scenes_with_ffmpeg(filepath, scene_dir, session_id)
-                else:
-                    frame_data = extract_frames_with_ffmpeg(filepath, scene_dir, interval, session_id)
-                print(f"Frame extraction completed. Result: {len(frame_data) if frame_data else 0} frames")
-                print(f"Frame data format: {frame_data[:2] if frame_data else 'No data'}")
-                
-                if not frame_data:
-                    # FFmpegが使えない場合の代替処理
-                    print("No frames extracted, showing error")
-                    flash('動画の処理に失敗しました。ファイル形式を確認してください。')
-                    return redirect(request.url)
-                
-                # frame_dataの形式を確認して適切に処理
-                scenes = []
-                for item in frame_data:
-                    if isinstance(item, tuple) and len(item) == 2:
-                        # (filename, timestamp) 形式
-                        fname, timestamp = item
-                        scenes.append({
-                            'image': f"{filename_no_ext}/{fname}",
-                            'start': timestamp
-                        })
-                    elif isinstance(item, dict):
-                        # 辞書形式の場合
-                        scenes.append({
-                            'image': f"{filename_no_ext}/{item.get('filename', '')}",
-                            'start': item.get('time_display', '00:00:00.000')
-                        })
+                    if mode == 'scene':
+                        frame_data = extract_scenes_with_ffmpeg(filepath, scene_dir, session_id)
                     else:
-                        print(f"Unexpected frame_data format: {type(item)} - {item}")
+                        frame_data = extract_frames_with_ffmpeg(filepath, scene_dir, interval, session_id)
+                    print(f"Frame extraction completed. Result: {len(frame_data) if frame_data else 0} frames")
+                    print(f"Frame data format: {frame_data[:2] if frame_data else 'No data'}")
                 
-                print(f"Final scenes data: {scenes[:2] if scenes else 'No scenes'}")
+                    if not frame_data:
+                        # FFmpegが使えない場合の代替処理
+                        print("No frames extracted, showing error")
+                        if session_id:
+                            update_progress(session_id, 0, 'error', 'フレーム抽出失敗', 0)
+                        flash('動画の処理に失敗しました。ファイル形式を確認してください。')
+                        return redirect(request.url)
                 
-                # 処理完了を通知
-                update_progress(session_id, 100, 'completed', '完了', 0)
+                    # frame_dataの形式を確認して適切に処理
+                    scenes = []
+                    for item in frame_data:
+                        if isinstance(item, tuple) and len(item) == 2:
+                            # (filename, timestamp) 形式
+                            fname, timestamp = item
+                            scenes.append({
+                                'image': f"{filename_no_ext}/{fname}",
+                                'start': timestamp
+                            })
+                        elif isinstance(item, dict):
+                            # 辞書形式の場合
+                            scenes.append({
+                                'image': f"{filename_no_ext}/{item.get('filename', '')}",
+                                'start': item.get('time_display', '00:00:00.000')
+                            })
+                        else:
+                            print(f"Unexpected frame_data format: {type(item)} - {item}")
                 
-                return render_template('index.html', 
-                                     video=filename, 
-                                     scenes=scenes, 
-                                     selected_mode=mode, 
-                                     interval=interval,
-                                     session_id=session_id)
+                    print(f"Final scenes data: {scenes[:2] if scenes else 'No scenes'}")
+                
+                    # 処理完了を通知
+                    update_progress(session_id, 100, 'completed', '完了', 0)
+                    
+                    return render_template('index.html', 
+                                         video=filename, 
+                                         scenes=scenes, 
+                                         selected_mode=mode, 
+                                         interval=interval,
+                                         session_id=session_id)
                                      
             except Exception as e:
                 print(f"処理エラー: {e}")
+                import traceback
+                traceback.print_exc()
+                if session_id:
+                    update_progress(session_id, 0, 'error', f'エラー: {str(e)}', 0)
                 flash('動画の処理中にエラーが発生しました')
-                return redirect(request.url)
+                return redirect(request.url), 500
+                
+        except Exception as e:
+            print(f"Request processing error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'error': str(e)}, 400
     
     return render_template('index.html', video=None, scenes=None, selected_mode='interval')
 

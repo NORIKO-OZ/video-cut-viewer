@@ -1152,45 +1152,31 @@
                     // ファイルが選択されているかチェック
                     const fileInput = document.getElementById('video-input');
                     if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                        // フォームをAjaxで送信してセッションIDを取得
-                        e.preventDefault();
-                        submitFormWithProgress(form);
+                        // セッションIDを生成してフォームに追加
+                        const sessionId = generateSessionId();
+                        
+                        // hidden inputでセッションIDを送信
+                        let sessionInput = document.getElementById('session-id-input');
+                        if (!sessionInput) {
+                            sessionInput = document.createElement('input');
+                            sessionInput.type = 'hidden';
+                            sessionInput.name = 'session_id';
+                            sessionInput.id = 'session-id-input';
+                            form.appendChild(sessionInput);
+                        }
+                        sessionInput.value = sessionId;
+                        
+                        // 進捗表示を開始
+                        showProgress();
+                        
+                        // 少し待ってから進捗ストリームに接続
+                        setTimeout(() => {
+                            connectToProgressStream(sessionId);
+                        }, 500);
+                        
+                        // 通常のフォーム送信を続行
                     }
                 });
-            }
-        }
-        
-        async function submitFormWithProgress(form) {
-            // 進捗表示を開始
-            showProgress();
-            
-            try {
-                // FormDataでファイルを送信
-                const formData = new FormData(form);
-                
-                // セッションIDを生成してフォームに追加
-                const sessionId = generateSessionId();
-                formData.append('session_id', sessionId);
-                
-                // 進捗ストリームに接続
-                connectToProgressStream(sessionId);
-                
-                // フォーム送信
-                const response = await fetch(form.action || '/', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (response.ok) {
-                    const html = await response.text();
-                    // ページを更新して結果を表示は進捗完了後にSSEで自動実行
-                } else {
-                    throw new Error('アップロードに失敗しました');
-                }
-            } catch (error) {
-                console.error('Form submission error:', error);
-                hideProgress();
-                alert('エラーが発生しました: ' + error.message);
             }
         }
         

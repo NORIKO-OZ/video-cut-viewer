@@ -202,6 +202,92 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* モーダル用スタイル */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            animation: zoomIn 0.3s ease;
+        }
+        
+        .modal-image {
+            width: 100%;
+            height: auto;
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: white;
+            transform: scale(1.1);
+        }
+        
+        .modal-info {
+            position: absolute;
+            bottom: -50px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes zoomIn {
+            from { 
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to { 
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
     </style>
 </head>
 <body>
@@ -259,9 +345,10 @@
                 <div class="scene-item" data-time="{{ scene.start }}">
                     <img src="{{ url_for('static', filename='scenes/' + scene.image) }}" 
                          alt="Scene at {{ scene.start }}"
-                         onclick="uploadImage('{{ url_for('static', filename='scenes/' + scene.image) }}')"
+                         onclick="uploadImage('{{ url_for('static', filename='scenes/' + scene.image) }}', '{{ scene.start }}')"
                          onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg=='"
-                         style="cursor: pointer;">
+                         style="cursor: pointer;" 
+                         title="クリックで拡大表示">
                     <div class="scene-controls">
                         <p>{{ scene.start }}</p>
                         <button onclick="jumpToTime('{{ scene.start }}')" class="jump-button">
@@ -275,20 +362,44 @@
         {% endif %}
     </div>
     
+    <!-- 画像拡大モーダル -->
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeModal()">×</button>
+            <img id="modalImage" class="modal-image" src="" alt="">
+            <div id="modalInfo" class="modal-info"></div>
+        </div>
+    </div>
+    
     <script>
-        // 画像アップロード機能
-        function uploadImage(imageUrl) {
-            console.log('Uploading image:', imageUrl);
+        // 画像拡大モーダル機能
+        function uploadImage(imageUrl, timeStr) {
+            console.log('Opening image modal:', imageUrl);
             
-            // 画像を新しいタブで開く
-            window.open(imageUrl, '_blank');
+            const modal = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            const modalInfo = document.getElementById('modalInfo');
             
-            // または、画像をダウンロードリンクとして動作させる場合
-            // const link = document.createElement('a');
-            // link.href = imageUrl;
-            // link.download = imageUrl.split('/').pop();
-            // link.click();
+            modalImage.src = imageUrl;
+            modalInfo.textContent = timeStr ? `時刻: ${timeStr}` : '';
+            
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden'; // スクロールを無効化
         }
+        
+        // モーダルを閉じる
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.remove('show');
+            document.body.style.overflow = ''; // スクロールを復元
+        }
+        
+        // ESCキーでモーダルを閉じる
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
         
         // 時間指定での動画ジャンプ
         function jumpToTime(timeStr) {

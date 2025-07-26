@@ -216,7 +216,7 @@
             <h3>📹 アップロードされた動画</h3>
             <div style="position: relative;">
                 <video id="videoPlayer" controls>
-                    <source src="{{ url_for('static', filename='uploads/' + video) }}" type="video/mp4">
+                    <source src="/uploads/{{ video }}" type="video/mp4">
                     お使いのブラウザは動画再生に対応していません。
                 </video>
                 <div id="timeDisplay" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 5px; font-family: monospace;">

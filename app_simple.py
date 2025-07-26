@@ -2,7 +2,7 @@ import os
 import sys
 import uuid
 import subprocess
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
 from PIL import Image
 import tempfile
 import shutil
@@ -161,6 +161,11 @@ def debug():
         debug_info['ffmpeg_error'] = str(e)
     
     return debug_info
+
+@app.route('/uploads/<filename>')
+def serve_uploaded_file(filename):
+    """アップロードされた動画ファイルを配信"""
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 @app.route('/test')
 def test():

@@ -126,6 +126,37 @@ def index():
     
     return render_template('index.html', video=None, scenes=None, selected_mode='interval')
 
+@app.route('/health')
+def health():
+    return {'status': 'OK', 'message': 'Application is running', 'app': 'app_simple.py'}
+
+@app.route('/debug')
+def debug():
+    """システム情報とFFmpeg状態のデバッグ"""
+    import os
+    
+    debug_info = {
+        'app_name': 'app_simple.py',
+        'environment_variables': {
+            'PATH': os.environ.get('PATH', 'Not set'),
+            'PORT': os.environ.get('PORT', 'Not set'),
+        },
+        'current_directory': os.getcwd(),
+        'directory_contents': os.listdir('.') if os.path.exists('.') else 'Cannot list directory',
+        'ffmpeg_check': 'Use subprocess to check FFmpeg availability'
+    }
+    
+    # FFmpegの簡単チェック
+    try:
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=10)
+        debug_info['ffmpeg_available'] = result.returncode == 0
+        debug_info['ffmpeg_version'] = result.stdout.split('\n')[0] if result.returncode == 0 else 'Failed'
+    except Exception as e:
+        debug_info['ffmpeg_available'] = False
+        debug_info['ffmpeg_error'] = str(e)
+    
+    return debug_info
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

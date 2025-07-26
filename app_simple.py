@@ -37,7 +37,7 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
             os.path.join(output_dir, 'screenshot_%03d.jpg')
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         
         if result.returncode != 0:
             print(f"FFmpeg error: {result.stderr}")
@@ -101,10 +101,15 @@ def index():
             
             # フレーム抽出（FFmpegまたはシンプルな方法を使用）
             try:
+                print(f"Starting frame extraction for: {filename}")
+                print(f"File size: {os.path.getsize(filepath)} bytes")
+                
                 frame_data = extract_frames_with_ffmpeg(filepath, scene_dir, interval)
+                print(f"Frame extraction completed. Result: {len(frame_data) if frame_data else 0} frames")
                 
                 if not frame_data:
                     # FFmpegが使えない場合の代替処理
+                    print("No frames extracted, showing error")
                     flash('動画の処理に失敗しました。ファイル形式を確認してください。')
                     return redirect(request.url)
                 

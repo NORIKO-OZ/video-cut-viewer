@@ -111,38 +111,74 @@
             box-shadow: 0 8px 20px rgba(5, 150, 105, 0.3);
         }
         
+        .file-upload-container {
+            position: relative;
+            margin: 20px auto;
+            max-width: 400px;
+        }
+        
         input[type="file"] {
-            margin: 20px;
-            padding: 16px 20px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            color: #e0e0e0;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            width: calc(100% - 40px);
-        }
-        
-        input[type="file"]:hover {
-            border-color: rgba(255, 255, 255, 0.4);
-            background: rgba(255, 255, 255, 0.08);
-        }
-        
-        input[type="file"]::file-selector-button {
-            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            margin-right: 12px;
-            font-weight: 600;
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
             cursor: pointer;
-            transition: all 0.3s ease;
         }
         
-        input[type="file"]::file-selector-button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+        .file-upload-area {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            min-height: 80px;
+        }
+        
+        .file-upload-area:hover {
+            border-color: rgba(5, 150, 105, 0.6);
+            background: rgba(5, 150, 105, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(5, 150, 105, 0.2);
+        }
+        
+        .file-upload-content {
+            text-align: center;
+            pointer-events: none;
+        }
+        
+        .file-upload-icon {
+            font-size: 2em;
+            margin-bottom: 8px;
+            color: #059669;
+        }
+        
+        .file-upload-text {
+            color: #e0e0e0;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .file-upload-hint {
+            color: #b0b0b0;
+            font-size: 0.85em;
+        }
+        
+        .file-selected {
+            border-color: rgba(5, 150, 105, 0.8);
+            background: rgba(5, 150, 105, 0.15);
+        }
+        
+        .file-selected .file-upload-icon {
+            color: #10b981;
+        }
+        
+        .file-selected .file-upload-text {
+            color: #10b981;
         }
         
         input[type="submit"] {
@@ -438,9 +474,16 @@
                     </label>
                 </div>
                 
-                <br>
-                <input type="file" name="video" accept="video/*" required>
-                <br>
+                <div class="file-upload-container">
+                    <input type="file" name="video" accept="video/*" required id="video-input">
+                    <div class="file-upload-area" id="file-upload-area">
+                        <div class="file-upload-content">
+                            <div class="file-upload-icon">📁</div>
+                            <div class="file-upload-text" id="file-upload-text">動画ファイルを選択</div>
+                            <div class="file-upload-hint">クリックまたはドラッグ&ドロップ</div>
+                        </div>
+                    </div>
+                </div>
                 <input type="submit" value="🚀 アップロード & 解析開始">
             </form>
         </div>
@@ -604,10 +647,63 @@
             }
         }
         
+        // ファイルアップロード機能
+        function setupFileUpload() {
+            const fileInput = document.getElementById('video-input');
+            const uploadArea = document.getElementById('file-upload-area');
+            const uploadText = document.getElementById('file-upload-text');
+            
+            if (!fileInput || !uploadArea || !uploadText) return;
+            
+            // ファイル選択時の処理
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    uploadArea.classList.add('file-selected');
+                    uploadText.textContent = file.name;
+                    document.querySelector('.file-upload-icon').textContent = '🎬';
+                    document.querySelector('.file-upload-hint').textContent = `${(file.size / (1024 * 1024)).toFixed(1)}MB`;
+                } else {
+                    uploadArea.classList.remove('file-selected');
+                    uploadText.textContent = '動画ファイルを選択';
+                    document.querySelector('.file-upload-icon').textContent = '📁';
+                    document.querySelector('.file-upload-hint').textContent = 'クリックまたはドラッグ&ドロップ';
+                }
+            });
+            
+            // ドラッグ&ドロップ機能
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.style.borderColor = 'rgba(5, 150, 105, 0.8)';
+                uploadArea.style.background = 'rgba(5, 150, 105, 0.15)';
+            });
+            
+            uploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                if (!uploadArea.classList.contains('file-selected')) {
+                    uploadArea.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                    uploadArea.style.background = 'rgba(255, 255, 255, 0.05)';
+                }
+            });
+            
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    const event = new Event('change', { bubbles: true });
+                    fileInput.dispatchEvent(event);
+                }
+            });
+        }
+        
         // 動画プレイヤーのイベントリスナー
         document.addEventListener('DOMContentLoaded', function() {
             const video = document.getElementById('videoPlayer');
             const timeDisplay = document.getElementById('timeDisplay');
+            
+            // ファイルアップロード機能を初期化
+            setupFileUpload();
             
             // モード選択ラジオボタンにイベントリスナーを追加
             const modeRadios = document.querySelectorAll('input[name="mode"]');

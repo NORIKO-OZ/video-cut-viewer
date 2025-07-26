@@ -152,10 +152,34 @@
         }
         
         .scene-item p {
-            padding: 10px;
+            padding: 5px 10px;
             text-align: center;
             font-weight: bold;
             color: #555;
+            margin: 0;
+        }
+        
+        .scene-controls {
+            padding: 10px;
+        }
+        
+        .jump-button {
+            width: 100%;
+            padding: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: transform 0.2s;
+            margin-top: 5px;
+        }
+        
+        .jump-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
         }
         
         .loading {
@@ -232,11 +256,18 @@
             <h3>🎞️ 検出されたシーン ({{ scenes|length }}個)</h3>
             <div class="scenes-grid">
                 {% for scene in scenes %}
-                <div class="scene-item" data-time="{{ scene.start }}" onclick="jumpToTime('{{ scene.start }}')">
+                <div class="scene-item" data-time="{{ scene.start }}">
                     <img src="{{ url_for('static', filename='scenes/' + scene.image) }}" 
                          alt="Scene at {{ scene.start }}"
-                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg=='">
-                    <p>{{ scene.start }}</p>
+                         onclick="uploadImage('{{ url_for('static', filename='scenes/' + scene.image) }}')"
+                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg=='"
+                         style="cursor: pointer;">
+                    <div class="scene-controls">
+                        <p>{{ scene.start }}</p>
+                        <button onclick="jumpToTime('{{ scene.start }}')" class="jump-button">
+                            ▶️ ジャンプ
+                        </button>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -245,6 +276,20 @@
     </div>
     
     <script>
+        // 画像アップロード機能
+        function uploadImage(imageUrl) {
+            console.log('Uploading image:', imageUrl);
+            
+            // 画像を新しいタブで開く
+            window.open(imageUrl, '_blank');
+            
+            // または、画像をダウンロードリンクとして動作させる場合
+            // const link = document.createElement('a');
+            // link.href = imageUrl;
+            // link.download = imageUrl.split('/').pop();
+            // link.click();
+        }
+        
         // 時間指定での動画ジャンプ
         function jumpToTime(timeStr) {
             const video = document.getElementById('videoPlayer');

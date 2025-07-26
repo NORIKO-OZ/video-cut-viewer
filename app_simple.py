@@ -55,11 +55,24 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
             print("No scene changes detected, using fallback method")
             return []
         
+        # 重複を除去し、最小間隔でフィルタリング
+        filtered_timestamps = []
+        min_interval = 2.0  # 最低2秒間隔
+        
+        for timestamp in sorted(set(scene_timestamps)):  # 重複除去とソート
+            if not filtered_timestamps or (timestamp - filtered_timestamps[-1]) >= min_interval:
+                filtered_timestamps.append(timestamp)
+        
+        print(f"After filtering: {len(filtered_timestamps)} unique scenes (min {min_interval}s interval)")
+        scene_timestamps = filtered_timestamps
+        
         # 検出された各シーン時刻でフレームを抽出
         scenes_data = []
         for i, timestamp_sec in enumerate(scene_timestamps):
-            frame_count = i + 1
-            output_file = os.path.join(output_dir, f'scene_{frame_count:03d}.jpg')
+            # タイムスタンプをファイル名に含める（重複防止）
+            timestamp_int = int(timestamp_sec)
+            filename = f'scene_{timestamp_int:04d}s_{i+1:02d}.jpg'
+            output_file = os.path.join(output_dir, filename)
             
             cmd_extract = [
                 'ffmpeg', '-ss', str(timestamp_sec), '-i', video_path,
@@ -75,8 +88,8 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
                 seconds = int(timestamp_sec % 60)
                 timestamp_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
                 
-                scenes_data.append((f'scene_{frame_count:03d}.jpg', timestamp_str))
-                print(f"Scene {frame_count}: scene_{frame_count:03d}.jpg -> {timestamp_str} ({timestamp_sec:.3f}s)")
+                scenes_data.append((filename, timestamp_str))
+                print(f"Scene {i+1}: {filename} -> {timestamp_str} ({timestamp_sec:.3f}s)")
             else:
                 print(f"Failed to extract frame at {timestamp_sec}s")
         

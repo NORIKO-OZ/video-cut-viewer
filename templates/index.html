@@ -113,12 +113,35 @@
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            transition: all 0.2s;
             cursor: pointer;
+            position: relative;
         }
         
         .scene-item:hover {
             transform: translateY(-5px);
+        }
+        
+        .scene-item.active {
+            border: 3px solid #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        
+        .scene-item.active::after {
+            content: '▶';
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: #667eea;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
         }
         
         .scene-item img {
@@ -191,10 +214,15 @@
         {% if video %}
         <div class="video-section">
             <h3>📹 アップロードされた動画</h3>
-            <video id="videoPlayer" controls>
-                <source src="{{ url_for('static', filename='uploads/' + video) }}" type="video/mp4">
-                お使いのブラウザは動画再生に対応していません。
-            </video>
+            <div style="position: relative;">
+                <video id="videoPlayer" controls>
+                    <source src="{{ url_for('static', filename='uploads/' + video) }}" type="video/mp4">
+                    お使いのブラウザは動画再生に対応していません。
+                </video>
+                <div id="timeDisplay" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 5px; font-family: monospace;">
+                    00:00:00 / 00:00:00
+                </div>
+            </div>
         </div>
         {% endif %}
         
@@ -203,7 +231,7 @@
             <h3>🎞️ 検出されたシーン ({{ scenes|length }}個)</h3>
             <div class="scenes-grid">
                 {% for scene in scenes %}
-                <div class="scene-item" onclick="jumpToTime('{{ scene.start }}')">
+                <div class="scene-item" data-time="{{ scene.start }}" onclick="jumpToTime('{{ scene.start }}')">
                     <img src="{{ url_for('static', filename='scenes/' + scene.image) }}" 
                          alt="Scene at {{ scene.start }}"
                          onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg=='">
@@ -233,19 +261,107 @@
             const video = document.getElementById('videoPlayer');
             if (!video) return;
             
-            // "00:01:23.456" 形式を秒に変換
-            const parts = timeStr.split(':');
-            let seconds = 0;
+            console.log('Jumping to time:', timeStr);
             
-            if (parts.length === 3) {
-                seconds = parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2]);
-            }
+            // "00:01:23.000" 形式を秒に変換
+            const seconds = timeStringToSeconds(timeStr);
+            console.log('Calculated seconds:', seconds);
             
+            // 動画の現在時刻を設定
             video.currentTime = seconds;
-            video.play();
+            
+            // クリックされたサムネイルをアクティブにする
+            const sceneItems = document.querySelectorAll('.scene-item');
+            sceneItems.forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.time === timeStr) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // 少し待ってから再生（シークが完了するのを待つ）
+            setTimeout(() => {
+                video.play().catch(e => console.log('Play failed:', e));
+            }, 100);
             
             // 動画の位置までスクロール
             video.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        // 時間フォーマット関数
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return '00:00:00';
+            
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // 動画プレイヤーのイベントリスナー
+        document.addEventListener('DOMContentLoaded', function() {
+            const video = document.getElementById('videoPlayer');
+            const timeDisplay = document.getElementById('timeDisplay');
+            
+            if (video && timeDisplay) {
+                // 時刻表示を更新
+                function updateTimeDisplay() {
+                    const current = formatTime(video.currentTime);
+                    const duration = formatTime(video.duration);
+                    timeDisplay.textContent = `${current} / ${duration}`;
+                }
+                
+                // イベントリスナーを追加
+                video.addEventListener('timeupdate', function() {
+                    updateTimeDisplay();
+                    highlightCurrentScene();
+                });
+                video.addEventListener('loadedmetadata', updateTimeDisplay);
+                video.addEventListener('durationchange', updateTimeDisplay);
+            }
+        });
+        
+        // 現在の再生位置に最も近いシーンをハイライト
+        function highlightCurrentScene() {
+            const video = document.getElementById('videoPlayer');
+            if (!video) return;
+            
+            const currentTime = video.currentTime;
+            const sceneItems = document.querySelectorAll('.scene-item');
+            let closestScene = null;
+            let closestDiff = Infinity;
+            
+            sceneItems.forEach(item => {
+                const timeStr = item.dataset.time;
+                const sceneSeconds = timeStringToSeconds(timeStr);
+                const diff = Math.abs(sceneSeconds - currentTime);
+                
+                if (diff < closestDiff) {
+                    closestDiff = diff;
+                    closestScene = item;
+                }
+            });
+            
+            // 全てのアクティブクラスを削除
+            sceneItems.forEach(item => item.classList.remove('active'));
+            
+            // 最も近いシーンをハイライト（5秒以内の場合のみ）
+            if (closestScene && closestDiff <= 5) {
+                closestScene.classList.add('active');
+            }
+        }
+        
+        // 時間文字列を秒に変換するヘルパー関数
+        function timeStringToSeconds(timeStr) {
+            const parts = timeStr.split(':');
+            if (parts.length === 3) {
+                const hours = parseInt(parts[0]) || 0;
+                const minutes = parseInt(parts[1]) || 0;
+                const seconds = parseFloat(parts[2]) || 0;
+                return hours * 3600 + minutes * 60 + seconds;
+            }
+            return 0;
         }
         
         // ファイルアップロード時のローディング表示

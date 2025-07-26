@@ -2,4 +2,4 @@
 builder = "dockerfile"
 
 [deploy]
-startCommand = "python app_minimal.py"
+startCommand = "python app_simple.py"

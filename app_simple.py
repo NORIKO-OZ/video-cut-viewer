@@ -49,9 +49,10 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
         
         for i, filename in enumerate(files):
             timestamp_seconds = i * interval_sec
-            hours = timestamp_seconds // 3600
-            minutes = (timestamp_seconds % 3600) // 60
-            seconds = timestamp_seconds % 60
+            hours = int(timestamp_seconds // 3600)
+            minutes = int((timestamp_seconds % 3600) // 60)
+            seconds = int(timestamp_seconds % 60)
+            # より正確な時間表示のため、実際の秒数を保持
             timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
             timestamps.append(timestamp)
             

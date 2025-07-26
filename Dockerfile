@@ -24,4 +24,4 @@ EXPOSE $PORT
 RUN which ffmpeg && ffmpeg -version
 
 # アプリケーションを起動
-CMD ["python", "app_minimal.py"]
+CMD ["python", "app_simple.py"]

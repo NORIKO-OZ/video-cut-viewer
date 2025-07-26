@@ -106,6 +106,7 @@ def index():
                 
                 frame_data = extract_frames_with_ffmpeg(filepath, scene_dir, interval)
                 print(f"Frame extraction completed. Result: {len(frame_data) if frame_data else 0} frames")
+                print(f"Frame data format: {frame_data[:2] if frame_data else 'No data'}")
                 
                 if not frame_data:
                     # FFmpegが使えない場合の代替処理
@@ -113,10 +114,26 @@ def index():
                     flash('動画の処理に失敗しました。ファイル形式を確認してください。')
                     return redirect(request.url)
                 
-                scenes = [{
-                    'image': f"{filename_no_ext}/{fname}",
-                    'start': timestamp
-                } for fname, timestamp in frame_data]
+                # frame_dataの形式を確認して適切に処理
+                scenes = []
+                for item in frame_data:
+                    if isinstance(item, tuple) and len(item) == 2:
+                        # (filename, timestamp) 形式
+                        fname, timestamp = item
+                        scenes.append({
+                            'image': f"{filename_no_ext}/{fname}",
+                            'start': timestamp
+                        })
+                    elif isinstance(item, dict):
+                        # 辞書形式の場合
+                        scenes.append({
+                            'image': f"{filename_no_ext}/{item.get('filename', '')}",
+                            'start': item.get('time_display', '00:00:00.000')
+                        })
+                    else:
+                        print(f"Unexpected frame_data format: {type(item)} - {item}")
+                
+                print(f"Final scenes data: {scenes[:2] if scenes else 'No scenes'}")
                 
                 return render_template('index.html', 
                                      video=filename, 

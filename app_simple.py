@@ -66,6 +66,11 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
         print(f"After filtering: {len(filtered_timestamps)} unique scenes (min {min_interval}s interval)")
         scene_timestamps = filtered_timestamps
         
+        # 0秒のフレームを最初に追加（開始フレーム）
+        if not scene_timestamps or scene_timestamps[0] > 0.5:
+            scene_timestamps.insert(0, 0.0)
+            print("Added 0s frame as starting point")
+        
         # 検出された各シーン時刻でフレームを抽出
         scenes_data = []
         for i, timestamp_sec in enumerate(scene_timestamps):

@@ -994,12 +994,77 @@
         }
         
         // 進捗表示機能
-        function showProgress() {
+        let progressEventSource = null;
+        
+        function showProgress(sessionId) {
             const modal = document.getElementById('progressModal');
             modal.style.display = 'flex';
             
-            // 進捗をシミュレート
-            simulateProgress();
+            if (sessionId) {
+                // 実際のサーバー進捗と連動
+                connectToProgressStream(sessionId);
+            } else {
+                // フォールバック: シミュレート
+                simulateProgress();
+            }
+        }
+        
+        function connectToProgressStream(sessionId) {
+            // 既存の接続を閉じる
+            if (progressEventSource) {
+                progressEventSource.close();
+            }
+            
+            // Server-Sent Eventsで進捗を受信
+            progressEventSource = new EventSource(`/progress/${sessionId}`);
+            
+            progressEventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    const progress = data.progress || 0;
+                    const status = data.status || 'processing';
+                    const step = data.step || '';
+                    const estimatedTime = data.estimated_time || 0;
+                    
+                    // 進捗を更新
+                    updateProgress(progress, step, getStepName(status, progress));
+                    
+                    // 推定時間を更新
+                    const estimatedTimeEl = document.getElementById('estimatedTime');
+                    if (estimatedTimeEl) {
+                        if (estimatedTime > 0) {
+                            estimatedTimeEl.textContent = `推定残り時間: ${estimatedTime}秒`;
+                        } else if (progress >= 100) {
+                            estimatedTimeEl.textContent = '完了しました！';
+                        }
+                    }
+                    
+                    // 完了時の処理
+                    if (progress >= 100 || status === 'completed') {
+                        progressEventSource.close();
+                        setTimeout(() => {
+                            hideProgress();
+                            window.location.reload();
+                        }, 2000);
+                    }
+                } catch (e) {
+                    console.error('Progress data parse error:', e);
+                }
+            };
+            
+            progressEventSource.onerror = function(event) {
+                console.error('Progress stream error:', event);
+                progressEventSource.close();
+                // エラー時はシミュレートに切り替え
+                simulateProgress();
+            };
+        }
+        
+        function getStepName(status, progress) {
+            if (status === 'uploading' || progress < 10) return 'upload';
+            if (status === 'uploaded' || progress < 40) return 'analyze';
+            if (status === 'processing' || progress < 95) return 'extract';
+            return 'complete';
         }
         
         function hideProgress() {
@@ -1087,13 +1152,59 @@
                     // ファイルが選択されているかチェック
                     const fileInput = document.getElementById('video-input');
                     if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                        showProgress();
+                        // フォームをAjaxで送信してセッションIDを取得
+                        e.preventDefault();
+                        submitFormWithProgress(form);
                     }
                 });
             }
         }
         
-        console.log('Video Cut Viewer with time sync loaded');
+        async function submitFormWithProgress(form) {
+            // 進捗表示を開始
+            showProgress();
+            
+            try {
+                // FormDataでファイルを送信
+                const formData = new FormData(form);
+                
+                // セッションIDを生成してフォームに追加
+                const sessionId = generateSessionId();
+                formData.append('session_id', sessionId);
+                
+                // 進捗ストリームに接続
+                connectToProgressStream(sessionId);
+                
+                // フォーム送信
+                const response = await fetch(form.action || '/', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const html = await response.text();
+                    // ページを更新して結果を表示は進捗完了後にSSEで自動実行
+                } else {
+                    throw new Error('アップロードに失敗しました');
+                }
+            } catch (error) {
+                console.error('Form submission error:', error);
+                hideProgress();
+                alert('エラーが発生しました: ' + error.message);
+            }
+        }
+        
+        function generateSessionId() {
+            return 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        }
+        
+        // ページ読み込み完了時の初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            setupProgressOnSubmit();
+            if (typeof setupModeToggle === 'function') setupModeToggle();
+            if (typeof updateVideoInfo === 'function') updateVideoInfo();
+            console.log('Video Cut Viewer with real-time progress loaded');
+        });
     </script>
 </body>
 </html>

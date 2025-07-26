@@ -2,10 +2,14 @@ import os
 import sys
 import uuid
 import subprocess
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, Response, jsonify
 from PIL import Image
 import tempfile
 import shutil
+import threading
+import time
+import json
+from collections import defaultdict
 
 if getattr(sys, 'frozen', False):
     base_dir = os.path.dirname(sys.executable)
@@ -24,9 +28,27 @@ os.makedirs(SCENES_FOLDER, exist_ok=True)
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 app.secret_key = 'your-secret-key-here'
 
-def extract_scenes_with_ffmpeg(video_path, output_dir):
+# 進捗状況を管理するグローバル辞書
+progress_data = defaultdict(lambda: {'progress': 0, 'status': 'waiting', 'step': '', 'estimated_time': 0})
+progress_lock = threading.Lock()
+
+def update_progress(session_id, progress, status, step, estimated_time=0):
+    """進捗情報を更新"""
+    with progress_lock:
+        progress_data[session_id].update({
+            'progress': progress,
+            'status': status,
+            'step': step,
+            'estimated_time': estimated_time,
+            'timestamp': time.time()
+        })
+
+def extract_scenes_with_ffmpeg(video_path, output_dir, session_id=None):
     """FFmpegを使用してシーン変化を検出してフレームを抽出"""
     os.makedirs(output_dir, exist_ok=True)
+    
+    if session_id:
+        update_progress(session_id, 10, 'processing', 'シーン変化を検出中...', 60)
     
     try:
         # まずシーン検出でタイムスタンプを取得
@@ -38,6 +60,8 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
         ]
         
         print("Detecting scene changes...")
+        if session_id:
+            update_progress(session_id, 20, 'processing', 'シーン変化を解析中...', 45)
         result_detect = subprocess.run(cmd_detect, capture_output=True, text=True, timeout=120)
         
         # showinfo からタイムスタンプを抽出
@@ -50,6 +74,8 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
                     scene_timestamps.append(timestamp_sec)
         
         print(f"Found {len(scene_timestamps)} scene changes at: {scene_timestamps[:5]}...")
+        if session_id:
+            update_progress(session_id, 40, 'processing', f'{len(scene_timestamps)}個のシーンを発見', 30)
         
         if not scene_timestamps:
             print("No scene changes detected, using fallback method")
@@ -73,7 +99,11 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
         
         # 検出された各シーン時刻でフレームを抽出
         scenes_data = []
+        total_scenes = len(scene_timestamps)
         for i, timestamp_sec in enumerate(scene_timestamps):
+            if session_id:
+                progress = 50 + (i / total_scenes) * 40  # 50%から50%で抽出進捗
+                update_progress(session_id, progress, 'processing', f'フレーム抽出: {i+1}/{total_scenes}', (total_scenes-i)*2)
             # タイムスタンプをファイル名に含める（重複防止）
             timestamp_int = int(timestamp_sec)
             filename = f'scene_{timestamp_int:04d}s_{i+1:02d}.jpg'
@@ -95,9 +125,14 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
                 
                 scenes_data.append((filename, timestamp_str))
                 print(f"Scene {i+1}: {filename} -> {timestamp_str} ({timestamp_sec:.3f}s)")
+                if session_id:
+                    progress = 50 + ((i+1) / total_scenes) * 40
+                    update_progress(session_id, progress, 'processing', f'フレーム抽出完了: {i+1}/{total_scenes}', (total_scenes-i-1)*2)
             else:
                 print(f"Failed to extract frame at {timestamp_sec}s")
         
+        if session_id:
+            update_progress(session_id, 95, 'completing', 'シーン抽出完了', 2)
         return scenes_data
         
     except subprocess.TimeoutExpired:
@@ -107,9 +142,12 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
         print(f"Error in scene detection: {e}")
         return []
 
-def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
+def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5, session_id=None):
     """FFmpegを使用してフレームを抽出"""
     os.makedirs(output_dir, exist_ok=True)
+    
+    if session_id:
+        update_progress(session_id, 10, 'processing', '動画情報を取得中...', 30)
     
     try:
         # まず動画の長さを取得
@@ -117,6 +155,8 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
             'ffprobe', '-v', 'quiet', '-print_format', 'json', 
             '-show_entries', 'format=duration', video_path
         ]
+        if session_id:
+            update_progress(session_id, 20, 'processing', '動画の長さを調査中...', 25)
         duration_result = subprocess.run(cmd_duration, capture_output=True, text=True, timeout=30)
         
         if duration_result.returncode != 0:
@@ -126,15 +166,25 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
         import json
         duration_data = json.loads(duration_result.stdout)
         video_duration = float(duration_data['format']['duration'])
+        if session_id:
+            update_progress(session_id, 30, 'processing', f'動画長さ: {int(video_duration)}秒', 20)
         
         # 抽出する時刻のリストを作成
         timestamps = []
         files = []
         frame_count = 0
+        total_frames = int(video_duration / interval_sec) + 1
+        
+        if session_id:
+            update_progress(session_id, 40, 'processing', f'{total_frames}個のフレームを抽出予定', 15)
         
         current_time = 0
         while current_time < video_duration:
             frame_count += 1
+            
+            if session_id:
+                progress = 40 + (frame_count / total_frames) * 50  # 40%から50%で抽出進捗
+                update_progress(session_id, progress, 'processing', f'フレーム抽出: {frame_count}/{total_frames}', (total_frames-frame_count)*1.5)
             
             # 各時刻でフレームを抽出
             cmd = [
@@ -158,6 +208,8 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
             
             current_time += interval_sec
         
+        if session_id:
+            update_progress(session_id, 95, 'completing', 'フレーム抽出完了', 2)
         return list(zip(files, timestamps))
         
     except subprocess.TimeoutExpired:
@@ -173,6 +225,40 @@ def seconds_to_timecode(seconds):
     secs = seconds % 60
     return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
 
+@app.route('/progress/<session_id>')
+def get_progress(session_id):
+    """進捗情報をServer-Sent Eventsで送信"""
+    def generate():
+        last_progress = -1
+        start_time = time.time()
+        
+        while True:
+            with progress_lock:
+                current_data = progress_data.get(session_id, {})
+            
+            current_progress = current_data.get('progress', 0)
+            
+            # 進捗が変わったら送信
+            if current_progress != last_progress or (time.time() - start_time) > 120:  # 2分でタイムアウト
+                data = json.dumps(current_data)
+                yield f"data: {data}\n\n"
+                last_progress = current_progress
+                
+                # 完了時は接続終了
+                if current_progress >= 100 or current_data.get('status') == 'completed':
+                    break
+                    
+                # タイムアウト時は接続終了
+                if (time.time() - start_time) > 120:
+                    break
+            
+            time.sleep(0.5)  # 0.5秒毎にチェック
+    
+    return Response(generate(), mimetype='text/event-stream',
+                   headers={'Cache-Control': 'no-cache',
+                           'Connection': 'keep-alive',
+                           'Access-Control-Allow-Origin': '*'})
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -186,10 +272,17 @@ def index():
             return redirect(request.url)
         
         if file:
+            # セッションIDを取得または生成
+            session_id = request.form.get('session_id')
+            if not session_id:
+                session_id = str(uuid.uuid4())
+            update_progress(session_id, 5, 'uploading', 'ファイルをアップロード中...', 90)
+            
             # ファイル保存
             filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
             filepath = os.path.join(UPLOAD_FOLDER, filename)
             file.save(filepath)
+            update_progress(session_id, 8, 'uploaded', 'アップロード完了', 80)
             
             # 処理モードとパラメータ取得
             mode = request.form.get('mode', 'interval')
@@ -207,9 +300,9 @@ def index():
                 print(f"File size: {os.path.getsize(filepath)} bytes")
                 
                 if mode == 'scene':
-                    frame_data = extract_scenes_with_ffmpeg(filepath, scene_dir)
+                    frame_data = extract_scenes_with_ffmpeg(filepath, scene_dir, session_id)
                 else:
-                    frame_data = extract_frames_with_ffmpeg(filepath, scene_dir, interval)
+                    frame_data = extract_frames_with_ffmpeg(filepath, scene_dir, interval, session_id)
                 print(f"Frame extraction completed. Result: {len(frame_data) if frame_data else 0} frames")
                 print(f"Frame data format: {frame_data[:2] if frame_data else 'No data'}")
                 
@@ -240,11 +333,15 @@ def index():
                 
                 print(f"Final scenes data: {scenes[:2] if scenes else 'No scenes'}")
                 
+                # 処理完了を通知
+                update_progress(session_id, 100, 'completed', '完了', 0)
+                
                 return render_template('index.html', 
                                      video=filename, 
                                      scenes=scenes, 
                                      selected_mode=mode, 
-                                     interval=interval)
+                                     interval=interval,
+                                     session_id=session_id)
                                      
             except Exception as e:
                 print(f"処理エラー: {e}")

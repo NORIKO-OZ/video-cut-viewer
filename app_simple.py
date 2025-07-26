@@ -29,35 +29,52 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
     os.makedirs(output_dir, exist_ok=True)
     
     try:
-        # FFmpegでフレームを抽出
-        # 0秒から開始して定間隔でフレームを抽出
-        cmd = [
-            'ffmpeg', '-i', video_path,
-            '-vf', f'fps=1/{interval_sec}',
-            '-q:v', '2',  # 高品質
-            os.path.join(output_dir, 'screenshot_%03d.jpg')
+        # まず動画の長さを取得
+        cmd_duration = [
+            'ffprobe', '-v', 'quiet', '-print_format', 'json', 
+            '-show_entries', 'format=duration', video_path
         ]
+        duration_result = subprocess.run(cmd_duration, capture_output=True, text=True, timeout=30)
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        
-        if result.returncode != 0:
-            print(f"FFmpeg error: {result.stderr}")
+        if duration_result.returncode != 0:
+            print(f"FFprobe error: {duration_result.stderr}")
             return []
         
-        # 生成されたファイルを取得
-        files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
-        timestamps = []
+        import json
+        duration_data = json.loads(duration_result.stdout)
+        video_duration = float(duration_data['format']['duration'])
         
-        for i, filename in enumerate(files):
-            # 定間隔モードでは、最初のフレームは0秒、その後interval_sec間隔
-            timestamp_seconds = i * interval_sec
-            hours = int(timestamp_seconds // 3600)
-            minutes = int((timestamp_seconds % 3600) // 60)
-            seconds = int(timestamp_seconds % 60)
-            timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
-            timestamps.append(timestamp)
-            print(f"Frame {i+1}: {filename} -> {timestamp} ({timestamp_seconds}秒)")
+        # 抽出する時刻のリストを作成
+        timestamps = []
+        files = []
+        frame_count = 0
+        
+        current_time = 0
+        while current_time < video_duration:
+            frame_count += 1
             
+            # 各時刻でフレームを抽出
+            cmd = [
+                'ffmpeg', '-ss', str(current_time), '-i', video_path,
+                '-vframes', '1', '-q:v', '2',
+                os.path.join(output_dir, f'screenshot_{frame_count:03d}.jpg')
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                hours = int(current_time // 3600)
+                minutes = int((current_time % 3600) // 60)
+                seconds = int(current_time % 60)
+                timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
+                timestamps.append(timestamp)
+                files.append(f'screenshot_{frame_count:03d}.jpg')
+                print(f"Frame {frame_count}: screenshot_{frame_count:03d}.jpg -> {timestamp} ({current_time}秒)")
+            else:
+                print(f"Failed to extract frame at {current_time}s: {result.stderr}")
+            
+            current_time += interval_sec
+        
         return list(zip(files, timestamps))
         
     except subprocess.TimeoutExpired:

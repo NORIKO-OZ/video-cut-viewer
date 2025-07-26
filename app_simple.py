@@ -33,7 +33,7 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
         scene_timestamps = []
         cmd_detect = [
             'ffmpeg', '-i', video_path,
-            '-vf', 'select=gt(scene\\,0.3),showinfo',
+            '-vf', 'select=gt(scene\\,0.2),showinfo',
             '-f', 'null', '-'
         ]
         
@@ -57,7 +57,7 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
         
         # 重複を除去し、最小間隔でフィルタリング
         filtered_timestamps = []
-        min_interval = 2.0  # 最低2秒間隔
+        min_interval = 0.5  # 最低0.5秒間隔（重複除去のみ）
         
         for timestamp in sorted(set(scene_timestamps)):  # 重複除去とソート
             if not filtered_timestamps or (timestamp - filtered_timestamps[-1]) >= min_interval:

@@ -381,6 +381,103 @@
             margin: 25px auto;
         }
         
+        /* 進捗表示 */
+        .progress-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .progress-content {
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+        }
+        
+        .progress-title {
+            color: #ffffff;
+            font-size: 1.5em;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        
+        .progress-text {
+            color: #b0b0b0;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        
+        .progress-steps {
+            margin-top: 20px;
+        }
+        
+        .progress-step {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .progress-step.active {
+            background: rgba(5, 150, 105, 0.2);
+            border-left: 3px solid #059669;
+        }
+        
+        .progress-step.completed {
+            background: rgba(5, 150, 105, 0.1);
+            opacity: 0.7;
+        }
+        
+        .progress-step-icon {
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        
+        .progress-step-text {
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+        
+        .estimated-time {
+            margin-top: 15px;
+            color: #059669;
+            font-weight: 600;
+        }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -570,6 +667,37 @@
         {% endif %}
     </div>
     
+    <!-- 進捗表示モーダル -->
+    <div id="progressModal" class="progress-container">
+        <div class="progress-content">
+            <div class="progress-title">🎬 動画を解析中...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">準備中...</div>
+            <div class="estimated-time" id="estimatedTime"></div>
+            
+            <div class="progress-steps">
+                <div class="progress-step" id="step-upload">
+                    <div class="progress-step-icon">📤</div>
+                    <div class="progress-step-text">ファイルアップロード</div>
+                </div>
+                <div class="progress-step" id="step-analyze">
+                    <div class="progress-step-icon">🔍</div>
+                    <div class="progress-step-text">動画解析</div>
+                </div>
+                <div class="progress-step" id="step-extract">
+                    <div class="progress-step-icon">🎞️</div>
+                    <div class="progress-step-text">フレーム抽出</div>
+                </div>
+                <div class="progress-step" id="step-complete">
+                    <div class="progress-step-icon">✅</div>
+                    <div class="progress-step-text">完了</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- 画像拡大モーダル -->
     <div id="imageModal" class="modal" onclick="closeModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
@@ -745,6 +873,9 @@
             // ファイルアップロード機能を初期化
             setupFileUpload();
             
+            // 進捗表示機能を初期化
+            setupProgressOnSubmit();
+            
             // モード選択ラジオボタンにイベントリスナーを追加
             const modeRadios = document.querySelectorAll('input[name="mode"]');
             modeRadios.forEach(radio => {
@@ -860,6 +991,106 @@
             });
             
             button.textContent = isHidden ? '📦 全て非表示' : '👁️ 全て表示';
+        }
+        
+        // 進捗表示機能
+        function showProgress() {
+            const modal = document.getElementById('progressModal');
+            modal.style.display = 'flex';
+            
+            // 進捗をシミュレート
+            simulateProgress();
+        }
+        
+        function hideProgress() {
+            const modal = document.getElementById('progressModal');
+            modal.style.display = 'none';
+        }
+        
+        function updateProgress(percentage, text, step) {
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            if (progressFill) progressFill.style.width = percentage + '%';
+            if (progressText) progressText.textContent = text;
+            
+            // ステップの更新
+            if (step) {
+                // 全てのステップをリセット
+                document.querySelectorAll('.progress-step').forEach(s => {
+                    s.classList.remove('active', 'completed');
+                });
+                
+                // 現在のステップをアクティブに
+                const currentStep = document.getElementById('step-' + step);
+                if (currentStep) {
+                    currentStep.classList.add('active');
+                }
+                
+                // 前のステップを完了に
+                const steps = ['upload', 'analyze', 'extract', 'complete'];
+                const currentIndex = steps.indexOf(step);
+                for (let i = 0; i < currentIndex; i++) {
+                    const prevStep = document.getElementById('step-' + steps[i]);
+                    if (prevStep) {
+                        prevStep.classList.add('completed');
+                        prevStep.classList.remove('active');
+                    }
+                }
+            }
+        }
+        
+        function simulateProgress() {
+            let progress = 0;
+            const steps = [
+                { progress: 10, text: 'ファイルをアップロード中...', step: 'upload' },
+                { progress: 30, text: '動画の情報を取得中...', step: 'analyze' },
+                { progress: 50, text: 'シーンを検出中...', step: 'extract' },
+                { progress: 70, text: 'フレームを抽出中...', step: 'extract' },
+                { progress: 90, text: 'サムネイルを生成中...', step: 'extract' },
+                { progress: 100, text: '解析完了！', step: 'complete' }
+            ];
+            
+            let stepIndex = 0;
+            
+            const interval = setInterval(() => {
+                if (stepIndex < steps.length) {
+                    const currentStep = steps[stepIndex];
+                    updateProgress(currentStep.progress, currentStep.text, currentStep.step);
+                    
+                    // 推定時間の更新
+                    const estimatedTime = document.getElementById('estimatedTime');
+                    if (estimatedTime && currentStep.progress < 100) {
+                        const remaining = Math.max(1, Math.ceil((100 - currentStep.progress) / 10));
+                        estimatedTime.textContent = `推定残り時間: ${remaining}秒`;
+                    } else if (estimatedTime && currentStep.progress === 100) {
+                        estimatedTime.textContent = '完了しました！';
+                    }
+                    
+                    stepIndex++;
+                } else {
+                    clearInterval(interval);
+                    // 完了後、少し待ってから自動でページをリロード
+                    setTimeout(() => {
+                        hideProgress();
+                        window.location.reload();
+                    }, 2000);
+                }
+            }, 1000);
+        }
+        
+        // フォーム送信時に進捗表示を開始
+        function setupProgressOnSubmit() {
+            const form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    // ファイルが選択されているかチェック
+                    const fileInput = document.getElementById('video-input');
+                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                        showProgress();
+                    }
+                });
+            }
         }
         
         console.log('Video Cut Viewer with time sync loaded');

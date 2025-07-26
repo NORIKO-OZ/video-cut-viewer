@@ -310,6 +310,9 @@
         
         .scene-controls {
             padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
         
         .jump-button {
@@ -332,6 +335,33 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 16px rgba(5, 150, 105, 0.4);
             background: linear-gradient(135deg, #047857 0%, #059669 100%);
+        }
+        
+        .delete-button {
+            width: 100%;
+            padding: 8px;
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 8px rgba(220, 38, 38, 0.3);
+        }
+        
+        .delete-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+            background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
+        }
+        
+        .scene-item.deleted {
+            opacity: 0.3;
+            pointer-events: none;
+            transform: scale(0.95);
         }
         
         .loading {
@@ -505,10 +535,16 @@
         
         {% if scenes %}
         <div class="scenes-section">
-            <h3>🎞️ 検出されたシーン ({{ scenes|length }}個)</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3>🎞️ 検出されたシーン ({{ scenes|length }}個)</h3>
+                <button id="toggle-all-btn" onclick="toggleAllThumbnails()" 
+                        style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 8px rgba(5, 150, 105, 0.3);">
+                    📦 全て非表示
+                </button>
+            </div>
             <div class="scenes-grid">
                 {% for scene in scenes %}
-                <div class="scene-item" data-time="{{ scene.start }}">
+                <div class="scene-item" data-time="{{ scene.start }}" id="scene-{{ loop.index0 }}">
                     <img src="{{ url_for('static', filename='scenes/' + scene.image) }}" 
                          alt="Scene at {{ scene.start }}"
                          class="thumbnail-image"
@@ -521,6 +557,9 @@
                         <p>{{ scene.start }}</p>
                         <button onclick="jumpToTime('{{ scene.start }}')" class="jump-button">
                             ▶️ Jump
+                        </button>
+                        <button onclick="deleteThumbnail({{ loop.index0 }})" class="delete-button">
+                            🗑️ 削除
                         </button>
                     </div>
                 </div>
@@ -775,6 +814,52 @@
                 video.addEventListener('durationchange', updateTimeDisplay);
             }
         });
+        
+        // サムネイル削除機能
+        function deleteThumbnail(index) {
+            const sceneItem = document.getElementById(`scene-${index}`);
+            if (sceneItem) {
+                // 確認ダイアログを表示
+                if (confirm('このサムネイルを削除しますか？')) {
+                    // 削除アニメーション
+                    sceneItem.style.transition = 'all 0.5s ease';
+                    sceneItem.style.transform = 'scale(0.8)';
+                    sceneItem.style.opacity = '0';
+                    
+                    // アニメーション完了後に要素を削除
+                    setTimeout(() => {
+                        sceneItem.remove();
+                        updateSceneCount();
+                    }, 500);
+                }
+            }
+        }
+        
+        // シーン数を更新
+        function updateSceneCount() {
+            const remainingScenes = document.querySelectorAll('.scene-item').length;
+            const sceneTitle = document.querySelector('.scenes-section h3');
+            if (sceneTitle) {
+                sceneTitle.textContent = `🎞️ 検出されたシーン (${remainingScenes}個)`;
+            }
+        }
+        
+        // 全てのサムネイルを表示/非表示切り替え
+        function toggleAllThumbnails() {
+            const sceneItems = document.querySelectorAll('.scene-item');
+            const button = document.getElementById('toggle-all-btn');
+            const isHidden = button.textContent.includes('表示');
+            
+            sceneItems.forEach(item => {
+                if (isHidden) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            button.textContent = isHidden ? '📦 全て非表示' : '👁️ 全て表示';
+        }
         
         console.log('Video Cut Viewer with time sync loaded');
     </script>

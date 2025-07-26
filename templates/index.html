@@ -311,7 +311,7 @@
                 
                 <div id="interval-option" style="{% if selected_mode != 'interval' %}display:none;{% endif %}">
                     <label>間隔（秒）: 
-                        <input type="number" name="interval" value="{{ interval or 5 }}" min="1" max="60">
+                        <input type="number" id="interval-input" name="interval" value="{{ interval or 5 }}" min="1" max="60" {% if selected_mode != 'interval' %}disabled{% endif %}>
                     </label>
                 </div>
                 
@@ -465,10 +465,35 @@
             return 0;
         }
         
+        // モード切り替えで間隔入力の有効/無効を制御
+        function updateIntervalOption() {
+            const sceneMode = document.querySelector('input[name="mode"][value="scene"]');
+            const intervalMode = document.querySelector('input[name="mode"][value="interval"]');
+            const intervalOption = document.getElementById('interval-option');
+            const intervalInput = document.getElementById('interval-input');
+            
+            if (sceneMode && sceneMode.checked) {
+                intervalOption.style.display = 'none';
+                intervalInput.disabled = true;
+            } else if (intervalMode && intervalMode.checked) {
+                intervalOption.style.display = 'block';
+                intervalInput.disabled = false;
+            }
+        }
+        
         // 動画プレイヤーのイベントリスナー
         document.addEventListener('DOMContentLoaded', function() {
             const video = document.getElementById('videoPlayer');
             const timeDisplay = document.getElementById('timeDisplay');
+            
+            // モード選択ラジオボタンにイベントリスナーを追加
+            const modeRadios = document.querySelectorAll('input[name="mode"]');
+            modeRadios.forEach(radio => {
+                radio.addEventListener('change', updateIntervalOption);
+            });
+            
+            // 初期状態を設定
+            updateIntervalOption();
             
             // サムネイル画像にクリックイベントを設定
             const thumbnailImages = document.querySelectorAll('.thumbnail-image');

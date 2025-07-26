@@ -29,35 +29,57 @@ def extract_scenes_with_ffmpeg(video_path, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     
     try:
-        # シーン検出コマンド
-        cmd = [
+        # まずシーン検出でタイムスタンプを取得
+        scene_timestamps = []
+        cmd_detect = [
             'ffmpeg', '-i', video_path,
-            '-vf', 'select=gt(scene\\,0.3),scale=320:240',
-            '-vsync', 'vfr', '-q:v', '2',
-            os.path.join(output_dir, 'scene_%03d.jpg')
+            '-vf', 'select=gt(scene\\,0.3),showinfo',
+            '-f', 'null', '-'
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        print("Detecting scene changes...")
+        result_detect = subprocess.run(cmd_detect, capture_output=True, text=True, timeout=120)
         
-        if result.returncode != 0:
-            print(f"FFmpeg scene detection error: {result.stderr}")
+        # showinfo からタイムスタンプを抽出
+        import re
+        for line in result_detect.stderr.split('\n'):
+            if 'showinfo' in line and 'pts_time:' in line:
+                match = re.search(r'pts_time:([\d.]+)', line)
+                if match:
+                    timestamp_sec = float(match.group(1))
+                    scene_timestamps.append(timestamp_sec)
+        
+        print(f"Found {len(scene_timestamps)} scene changes at: {scene_timestamps[:5]}...")
+        
+        if not scene_timestamps:
+            print("No scene changes detected, using fallback method")
             return []
         
-        # 生成されたファイルを取得
-        files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
-        
-        # シーン検出では実際の時刻を推定
+        # 検出された各シーン時刻でフレームを抽出
         scenes_data = []
-        for i, filename in enumerate(files):
-            # シーン番号からおおよその時刻を推定（実際の実装では ffprobe で正確な時刻を取得）
-            estimated_seconds = i * 10  # 仮の推定値
-            hours = int(estimated_seconds // 3600)
-            minutes = int((estimated_seconds % 3600) // 60)
-            seconds = int(estimated_seconds % 60)
-            timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
-            scenes_data.append((filename, timestamp))
-            print(f"Scene {i+1}: {filename} -> {timestamp}")
+        for i, timestamp_sec in enumerate(scene_timestamps):
+            frame_count = i + 1
+            output_file = os.path.join(output_dir, f'scene_{frame_count:03d}.jpg')
             
+            cmd_extract = [
+                'ffmpeg', '-ss', str(timestamp_sec), '-i', video_path,
+                '-vframes', '1', '-q:v', '2', output_file
+            ]
+            
+            result_extract = subprocess.run(cmd_extract, capture_output=True, text=True, timeout=30)
+            
+            if result_extract.returncode == 0:
+                # タイムスタンプをフォーマット
+                hours = int(timestamp_sec // 3600)
+                minutes = int((timestamp_sec % 3600) // 60)
+                seconds = int(timestamp_sec % 60)
+                timestamp_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
+                
+                scenes_data.append((f'scene_{frame_count:03d}.jpg', timestamp_str))
+                print(f"Scene {frame_count}: scene_{frame_count:03d}.jpg -> {timestamp_str} ({timestamp_sec:.3f}s)")
+            else:
+                print(f"Failed to extract frame at {timestamp_sec}s")
+        
         return scenes_data
         
     except subprocess.TimeoutExpired:

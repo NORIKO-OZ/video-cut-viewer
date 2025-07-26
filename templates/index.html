@@ -186,7 +186,7 @@
         <div class="upload-section">
             <h2>動画をアップロードしてシーン解析</h2>
             
-            <form method="post" enctype="multipart/form-data">
+            <form method="post" action="/" enctype="multipart/form-data">
                 <div class="mode-selector">
                     <label>
                         <input type="radio" name="mode" value="scene" {% if selected_mode == 'scene' %}checked{% endif %}> 
@@ -365,15 +365,20 @@
         }
         
         // ファイルアップロード時のローディング表示
-        document.querySelector('form').addEventListener('submit', function() {
-            const container = document.querySelector('.container');
-            container.innerHTML += `
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <h3>動画を解析中...</h3>
-                    <p>しばらくお待ちください</p>
-                </div>
-            `;
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', function() {
+                    const container = document.querySelector('.container');
+                    container.innerHTML += `
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <h3>動画を解析中...</h3>
+                            <p>しばらくお待ちください</p>
+                        </div>
+                    `;
+                });
+            }
         });
     </script>
 </body>

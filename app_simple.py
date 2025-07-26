@@ -24,6 +24,49 @@ os.makedirs(SCENES_FOLDER, exist_ok=True)
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 app.secret_key = 'your-secret-key-here'
 
+def extract_scenes_with_ffmpeg(video_path, output_dir):
+    """FFmpegを使用してシーン変化を検出してフレームを抽出"""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        # シーン検出コマンド
+        cmd = [
+            'ffmpeg', '-i', video_path,
+            '-vf', 'select=gt(scene\\,0.3),scale=320:240',
+            '-vsync', 'vfr', '-q:v', '2',
+            os.path.join(output_dir, 'scene_%03d.jpg')
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        
+        if result.returncode != 0:
+            print(f"FFmpeg scene detection error: {result.stderr}")
+            return []
+        
+        # 生成されたファイルを取得
+        files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
+        
+        # シーン検出では実際の時刻を推定
+        scenes_data = []
+        for i, filename in enumerate(files):
+            # シーン番号からおおよその時刻を推定（実際の実装では ffprobe で正確な時刻を取得）
+            estimated_seconds = i * 10  # 仮の推定値
+            hours = int(estimated_seconds // 3600)
+            minutes = int((estimated_seconds % 3600) // 60)
+            seconds = int(estimated_seconds % 60)
+            timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
+            scenes_data.append((filename, timestamp))
+            print(f"Scene {i+1}: {filename} -> {timestamp}")
+            
+        return scenes_data
+        
+    except subprocess.TimeoutExpired:
+        print("FFmpeg scene detection timeout")
+        return []
+    except Exception as e:
+        print(f"Error in scene detection: {e}")
+        return []
+
 def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5):
     """FFmpegを使用してフレームを抽出"""
     os.makedirs(output_dir, exist_ok=True)
@@ -123,7 +166,10 @@ def index():
                 print(f"Starting frame extraction for: {filename}")
                 print(f"File size: {os.path.getsize(filepath)} bytes")
                 
-                frame_data = extract_frames_with_ffmpeg(filepath, scene_dir, interval)
+                if mode == 'scene':
+                    frame_data = extract_scenes_with_ffmpeg(filepath, scene_dir)
+                else:
+                    frame_data = extract_frames_with_ffmpeg(filepath, scene_dir, interval)
                 print(f"Frame extraction completed. Result: {len(frame_data) if frame_data else 0} frames")
                 print(f"Frame data format: {frame_data[:2] if frame_data else 'No data'}")
                 

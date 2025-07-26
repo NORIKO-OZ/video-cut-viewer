@@ -345,7 +345,9 @@
                 <div class="scene-item" data-time="{{ scene.start }}">
                     <img src="{{ url_for('static', filename='scenes/' + scene.image) }}" 
                          alt="Scene at {{ scene.start }}"
-                         onclick="uploadImage('{{ url_for('static', filename='scenes/' + scene.image) }}', '{{ scene.start }}')"
+                         class="thumbnail-image"
+                         data-image-url="{{ url_for('static', filename='scenes/' + scene.image) }}"
+                         data-time-str="{{ scene.start }}"
                          onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg=='"
                          style="cursor: pointer;" 
                          title="クリックで拡大表示">
@@ -460,6 +462,16 @@
         document.addEventListener('DOMContentLoaded', function() {
             const video = document.getElementById('videoPlayer');
             const timeDisplay = document.getElementById('timeDisplay');
+            
+            // サムネイル画像にクリックイベントを設定
+            const thumbnailImages = document.querySelectorAll('.thumbnail-image');
+            thumbnailImages.forEach(img => {
+                img.addEventListener('click', function() {
+                    const imageUrl = this.dataset.imageUrl;
+                    const timeStr = this.dataset.timeStr;
+                    uploadImage(imageUrl, timeStr);
+                });
+            });
             
             if (video && timeDisplay) {
                 // 時刻表示を更新

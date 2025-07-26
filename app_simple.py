@@ -162,6 +162,15 @@ def debug():
     
     return debug_info
 
+@app.route('/test')
+def test():
+    """シンプルなテスト用エンドポイント"""
+    return {
+        'status': 'OK',
+        'message': 'Test endpoint working',
+        'timestamp': str(subprocess.run(['date'], capture_output=True, text=True).stdout.strip())
+    }
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

@@ -765,17 +765,43 @@
         
         function simulateProgress() {
             let progress = 0;
+            let startTime = Date.now();
+            
             const interval = setInterval(() => {
-                // 進捗を段階的に更新（実際の処理に合わせて調整）
-                if (progress < 20) {
-                    progress += Math.random() * 3 + 1; // アップロード段階：速め
-                } else if (progress < 80) {
-                    progress += Math.random() * 2 + 0.5; // 処理段階：中程度
-                } else if (progress < 95) {
-                    progress += Math.random() * 1 + 0.2; // 完了段階：遅め
+                const elapsed = Date.now() - startTime;
+                
+                // より現実的な進捗カーブ：段階的だが均等に進む
+                if (progress < 15) {
+                    // アップロード段階：最初は少し速く
+                    progress += Math.random() * 2 + 0.8;
+                } else if (progress < 35) {
+                    // 初期処理段階：中程度
+                    progress += Math.random() * 1.5 + 0.5;
+                } else if (progress < 65) {
+                    // メイン処理段階：少し遅く（実際の重い処理をシミュレート）
+                    progress += Math.random() * 1 + 0.3;
+                } else if (progress < 85) {
+                    // フレーム抽出段階：安定したペース
+                    progress += Math.random() * 1.2 + 0.4;
+                } else if (progress < 98) {
+                    // 最終処理段階：少し速く
+                    progress += Math.random() * 1.5 + 0.5;
                 }
                 
-                if (progress >= 100) {
+                // 最低でも10秒は表示、最大20秒で完了
+                const minDuration = 10000; // 10秒
+                const maxDuration = 20000; // 20秒
+                
+                if (elapsed < minDuration) {
+                    progress = Math.min(progress, 95); // 最初の10秒は95%まで
+                } else if (elapsed >= minDuration) {
+                    // 10秒経過後は確実に完了に向かう
+                    const remainingTime = Math.max(0, maxDuration - elapsed);
+                    const targetProgress = 100 - (remainingTime / (maxDuration - minDuration)) * 5;
+                    progress = Math.max(progress, targetProgress);
+                }
+                
+                if (progress >= 100 || elapsed >= maxDuration) {
                     progress = 100;
                     clearInterval(interval);
                 }
@@ -784,18 +810,20 @@
                 
                 // 進捗に応じてタイトルテキストを更新
                 const titleText = document.getElementById('progress-title-text');
-                if (progress < 20) {
+                if (progress < 15) {
                     titleText.textContent = 'ファイルをアップロード中...';
-                } else if (progress < 50) {
+                } else if (progress < 35) {
                     titleText.textContent = '動画を解析中...';
-                } else if (progress < 80) {
+                } else if (progress < 65) {
                     titleText.textContent = 'フレームを抽出中...';
-                } else if (progress < 100) {
+                } else if (progress < 85) {
                     titleText.textContent = 'サムネイルを生成中...';
+                } else if (progress < 100) {
+                    titleText.textContent = '最終処理中...';
                 } else {
                     titleText.textContent = '処理完了！';
                 }
-            }, 100);
+            }, 150); // 150ms間隔でより滑らかに
         }
         
         // フォーム送信をAJAXに変更

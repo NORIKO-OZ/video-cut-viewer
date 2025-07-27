@@ -24,4 +24,4 @@ EXPOSE $PORT
 RUN which ffmpeg && ffmpeg -version
 
 # アプリケーションを起動
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "app_simple:app"]
+CMD gunicorn --bind 0.0.0.0:$PORT app_simple:app

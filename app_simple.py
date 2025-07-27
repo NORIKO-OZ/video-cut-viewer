@@ -287,9 +287,9 @@ def index():
                 print(f"Session ID: {session_id}")
                 update_progress(session_id, 5, 'uploading', 'ファイルをアップロード中...', 90)
             
-            # ファイル保存
-            filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
+                # ファイル保存
+                filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
                 update_progress(session_id, 8, 'uploaded', 'アップロード完了', 80)
             
@@ -354,14 +354,14 @@ def index():
                                          interval=interval,
                                          session_id=session_id)
                                      
-            except Exception as e:
-                print(f"処理エラー: {e}")
-                import traceback
-                traceback.print_exc()
-                if session_id:
-                    update_progress(session_id, 0, 'error', f'エラー: {str(e)}', 0)
-                flash('動画の処理中にエラーが発生しました')
-                return redirect(request.url), 500
+                except Exception as e:
+                    print(f"処理エラー: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    if session_id:
+                        update_progress(session_id, 0, 'error', f'エラー: {str(e)}', 0)
+                    flash('動画の処理中にエラーが発生しました')
+                    return redirect(request.url), 500
                 
         except Exception as e:
             print(f"Request processing error: {e}")

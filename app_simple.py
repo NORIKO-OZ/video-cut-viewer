@@ -407,6 +407,11 @@ def serve_uploaded_file(filename):
     """アップロードされた動画ファイルを配信"""
     return send_from_directory(UPLOAD_FOLDER, filename)
 
+@app.route('/static/scenes/<path:filename>')
+def serve_scene_file(filename):
+    """抽出されたシーン画像を配信"""
+    return send_from_directory(SCENES_FOLDER, filename)
+
 @app.route('/test')
 def test():
     """シンプルなテスト用エンドポイント"""

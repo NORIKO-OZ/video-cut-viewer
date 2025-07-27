@@ -6,14 +6,6 @@ import tempfile
 import shutil
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from PIL import Image
-try:
-    import ffmpeg
-    FFMPEG_AVAILABLE = True
-except ImportError:
-    FFMPEG_AVAILABLE = False
-
-# PySceneDetectは重い依存関係のため無効化
-SCENEDETECT_AVAILABLE = False
 
 # パス設定
 if getattr(sys, 'frozen', False):
@@ -122,315 +114,49 @@ def upload():
         file.save(filepath)
         
         # 処理モードを取得
-        mode = request.form.get('mode', 'interval')  # 'interval' or 'scene'
+        mode = request.form.get('mode', 'interval')
         interval = int(request.form.get('interval', 5))
-        sensitivity = float(request.form.get('sensitivity', 0.15))  # シーン検出の精度
+        sensitivity = float(request.form.get('sensitivity', 0.15))
         
-        print(f"=== FORM DATA DEBUG ===")
-        print(f"All form data: {dict(request.form)}")
-        print(f"Processing mode: '{mode}' (type: {type(mode)})")
-        print(f"Interval: {interval}")
-        print(f"Sensitivity: {sensitivity}")
-        print(f"SceneDetect available: {SCENEDETECT_AVAILABLE}")
-        print(f"=== END FORM DATA DEBUG ===")
+        print(f"Processing mode: {mode}, interval: {interval}s, sensitivity: {sensitivity}")
         
-        # フレーム抽出を試行
+        # フレーム抽出
         filename_no_ext = os.path.splitext(filename)[0]
         scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
         
-        # FFmpeg可用性チェック
-        ffmpeg_status = check_ffmpeg_availability()
-        
-        # 処理モードに応じて実行
-        error_info = None
         if mode == 'scene':
-            print("Using FFmpeg-based scene detection mode")
-            try:
-                scene_result = extract_scenes_with_ffmpeg(filepath, scene_dir, sensitivity)
-                if scene_result:
-                    # シーン検出成功 - フレーム情報を取得
-                    if isinstance(scene_result, list) and len(scene_result) > 0:
-                        if isinstance(scene_result[0], dict):
-                            # 新しい形式：タイムスタンプ付き
-                            frames = [item['filename'] for item in scene_result]
-                            frame_timestamps = scene_result
-                            print(f"DEBUG: Scene detection successful with timestamps:")
-                            for i, item in enumerate(scene_result):
-                                print(f"  {i+1}: {item['filename']} -> {item['timestamp']:.2f}s ({item['time_display']})")
-                        else:
-                            # 旧形式：ファイル名のみ
-                            frames = scene_result
-                            frame_timestamps = None
-                    processing_method = 'true scene detection (FFmpeg-based)'
-                else:
-                    print("Scene detection returned no frames, falling back to interval")
-                    fallback_result = extract_frames_simple(filepath, scene_dir, interval)
-                    if fallback_result and isinstance(fallback_result, list) and len(fallback_result) > 0:
-                        if isinstance(fallback_result[0], dict):
-                            frames = [item['filename'] for item in fallback_result]
-                            frame_timestamps = fallback_result
-                        else:
-                            frames = fallback_result
-                            frame_timestamps = None
-                    else:
-                        frames = []
-                        frame_timestamps = None
-                    processing_method = f'interval extraction ({interval}s) - scene detection failed'
-                    error_info = 'Scene detection returned no frames'
-            except Exception as e:
-                print(f"Scene detection failed with exception: {e}")
-                fallback_result = extract_frames_simple(filepath, scene_dir, interval)
-                if fallback_result and isinstance(fallback_result, list) and len(fallback_result) > 0:
-                    if isinstance(fallback_result[0], dict):
-                        frames = [item['filename'] for item in fallback_result]
-                        frame_timestamps = fallback_result
-                    else:
-                        frames = fallback_result
-                        frame_timestamps = None
-                else:
-                    frames = []
-                    frame_timestamps = None
-                processing_method = f'interval extraction ({interval}s) - scene detection error'
-                error_info = f'Scene detection error: {str(e)}'
+            frames = extract_scenes_with_ffmpeg(filepath, scene_dir, sensitivity)
+            processing_method = 'scene detection'
         else:
-            print(f"Using interval mode with {interval}s interval")
-            interval_result = extract_frames_simple(filepath, scene_dir, interval)
-            if interval_result and isinstance(interval_result, list) and len(interval_result) > 0:
-                if isinstance(interval_result[0], dict):
-                    # 新しい形式：タイムスタンプ付き
-                    frames = [item['filename'] for item in interval_result]
-                    frame_timestamps = interval_result
-                    print(f"DEBUG: Interval extraction successful with timestamps:")
-                    for i, item in enumerate(interval_result):
-                        print(f"  {i+1}: {item['filename']} -> {item['timestamp']:.2f}s ({item['time_display']})")
-                else:
-                    # 旧形式：ファイル名のみ（フォールバック）
-                    frames = interval_result
-                    frame_timestamps = None
-            else:
-                frames = []
-                frame_timestamps = None
+            frames = extract_frames_simple(filepath, scene_dir, interval)
             processing_method = f'interval extraction ({interval}s)'
         
         if frames:
-            response_data = {
-                'message': f'Video processed successfully using {processing_method}',
-                'filename': file.filename,
-                'video_file': filename,  # アップロードされた動画ファイル名
-                'frames': len(frames),
-                'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
-                'processing_method': processing_method,
-                'requested_mode': mode,
-                'debug_info': format_debug_info(ffmpeg_status)
-            }
-            if frame_timestamps:
-                response_data['frame_timestamps'] = frame_timestamps
-            if error_info:
-                response_data['error_info'] = error_info
-            return jsonify(response_data)
-        
-        # FFmpegが失敗した場合、代替処理を試行
-        frames = create_placeholder_frames(filepath, scene_dir, file.filename)
-        
-        if frames:
             return jsonify({
-                'message': 'Video uploaded successfully (using placeholder processing)',
+                'message': f'Video processed successfully using {processing_method}',
                 'filename': file.filename,
                 'video_file': filename,
                 'frames': len(frames),
-                'preview_url': f'/scenes/{filename_no_ext}/{frames[0]}' if frames else None,
-                'note': 'Using placeholder frame generation. Real video processing failed.',
-                'debug_info': format_debug_info(ffmpeg_status)
+                'preview_url': f'/static/scenes/{filename_no_ext}/{frames[0]}',
+                'processing_method': processing_method
             })
         else:
             return jsonify({
                 'message': 'Video uploaded but processing failed',
                 'filename': file.filename,
                 'video_file': filename,
-                'note': 'Video processing is not available on this platform',
-                'debug_info': format_debug_info(ffmpeg_status)
+                'note': 'Video processing is not available on this platform'
             })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def check_ffmpeg_availability():
-    """FFmpegの利用可能性をチェック"""
-    status = {}
-    
-    # ffmpeg-pythonライブラリの確認
-    status['ffmpeg_python_lib'] = FFMPEG_AVAILABLE
-    
-    # PySceneDetectの確認
-    status['scenedetect_available'] = SCENEDETECT_AVAILABLE
-    
-    # より多くのパスでFFmpegを検索
-    ffmpeg_paths = [
-        'ffmpeg', 
-        '/usr/bin/ffmpeg', 
-        '/usr/local/bin/ffmpeg', 
-        '/opt/ffmpeg/bin/ffmpeg',
-        '/app/.heroku/usr/bin/ffmpeg',
-        '/app/.apt/usr/bin/ffmpeg',
-        '/usr/local/stow/ffmpeg/bin/ffmpeg'
-    ]
-    
-    for ffmpeg_path in ffmpeg_paths:
-        try:
-            result = subprocess.run([ffmpeg_path, '-version'], 
-                                  capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                status['ffmpeg_binary'] = 'Available'
-                status['ffmpeg_path'] = ffmpeg_path
-                # バージョン情報の最初の行を取得
-                version_line = result.stdout.split('\n')[0]
-                status['ffmpeg_version'] = version_line
-                
-                # ffprobeもチェック
-                try:
-                    probe_result = subprocess.run(['ffprobe', '-version'], 
-                                                capture_output=True, text=True, timeout=5)
-                    status['ffprobe_available'] = probe_result.returncode == 0
-                except:
-                    status['ffprobe_available'] = False
-                
-                return status
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-        except Exception as e:
-            status['last_error'] = str(e)
-            continue
-    
-    # すべてのパスで見つからなかった場合、whichコマンドで検索
-    try:
-        which_result = subprocess.run(['which', 'ffmpeg'], 
-                                    capture_output=True, text=True, timeout=5)
-        if which_result.returncode == 0:
-            ffmpeg_path = which_result.stdout.strip()
-            if ffmpeg_path:
-                status['ffmpeg_binary'] = 'Available'
-                status['ffmpeg_path'] = f'{ffmpeg_path} (found via which)'
-                # バージョンを取得
-                try:
-                    version_result = subprocess.run([ffmpeg_path, '-version'], 
-                                                  capture_output=True, text=True, timeout=5)
-                    if version_result.returncode == 0:
-                        version_line = version_result.stdout.split('\n')[0]
-                        status['ffmpeg_version'] = version_line
-                except:
-                    pass
-                return status
-    except:
-        pass
-    
-    # それでも見つからない場合
-    status['ffmpeg_binary'] = 'Not found'
-    status['searched_paths'] = ', '.join(ffmpeg_paths)
-    
-    return status
-
-def format_debug_info(status):
-    """デバッグ情報を読みやすい形式に整形"""
-    info_lines = []
-    info_lines.append(f"• ffmpeg-python library: {'✅ Available' if status.get('ffmpeg_python_lib') else '❌ Not available'}")
-    info_lines.append("• Scene detection: ✅ FFmpeg-based (lightweight)")
-    
-    binary_status = status.get('ffmpeg_binary', 'Unknown')
-    if binary_status == 'Available':
-        info_lines.append("• FFmpeg binary: ✅ Available")
-        if 'ffmpeg_path' in status:
-            info_lines.append(f"• Path: {status['ffmpeg_path']}")
-        if 'ffmpeg_version' in status:
-            version = status['ffmpeg_version'][:60] + "..." if len(status['ffmpeg_version']) > 60 else status['ffmpeg_version']
-            info_lines.append(f"• Version: {version}")
-    else:
-        info_lines.append(f"• FFmpeg binary: ❌ {binary_status}")
-        if 'searched_paths' in status:
-            info_lines.append(f"• Searched paths: {status['searched_paths']}")
-        if 'last_error' in status:
-            info_lines.append(f"• Last error: {status['last_error']}")
-    
-    return "<br>".join(info_lines)
-
 def extract_frames_simple(video_path, output_dir, interval_sec=5):
-    """動画からフレームを抽出（ffmpeg-pythonまたはsubprocessを使用）"""
+    """シンプルなフレーム抽出"""
     os.makedirs(output_dir, exist_ok=True)
     
-    print(f"Starting frame extraction from: {video_path}")
-    print(f"Output directory: {output_dir}")
-    print(f"FFmpeg Python available: {FFMPEG_AVAILABLE}")
-    
-    # まずffmpeg-pythonを試行
-    if FFMPEG_AVAILABLE:
-        try:
-            print("Trying ffmpeg-python approach...")
-            result = extract_frames_with_ffmpeg_python(video_path, output_dir, interval_sec)
-            if result:
-                return result
-        except Exception as e:
-            print(f"ffmpeg-python failed: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    # フォールバック: 直接subprocessでffmpegを呼び出し
     try:
-        print("Trying subprocess approach...")
-        result = extract_frames_with_subprocess(video_path, output_dir, interval_sec)
-        if result:
-            return result
-    except Exception as e:
-        print(f"subprocess ffmpeg failed: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    print("All FFmpeg approaches failed, falling back to placeholder")
-    return []
-
-def extract_frames_with_ffmpeg_python(video_path, output_dir, interval_sec=5):
-    """ffmpeg-pythonを使用したフレーム抽出"""
-    try:
-        # 動画情報を取得
-        probe = ffmpeg.probe(video_path)
-        duration = float(probe['streams'][0]['duration'])
-        
-        # フレーム抽出
-        output_pattern = os.path.join(output_dir, 'frame_%03d.jpg')
-        (
-            ffmpeg
-            .input(video_path)
-            .filter('fps', fps=f'1/{interval_sec}')
-            .output(output_pattern, vcodec='mjpeg', qscale=2)
-            .overwrite_output()
-            .run(capture_stdout=True, capture_stderr=True, timeout=120)
-        )
-        
-        # 生成されたファイルを取得
-        files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
-        print(f"Successfully extracted {len(files)} frames using ffmpeg-python")
-        
-        # タイムスタンプ情報付きで返す
-        frame_info = []
-        for i, filename in enumerate(files):
-            timestamp = i * interval_sec
-            frame_info.append({
-                'filename': filename,
-                'timestamp': timestamp,
-                'time_display': f"{int(timestamp//60):02d}:{int(timestamp%60):02d}"
-            })
-        
-        print(f"DEBUG: Interval extraction with timestamps:")
-        for item in frame_info:
-            print(f"  {item['filename']} -> {item['timestamp']:.2f}s ({item['time_display']})")
-        
-        return frame_info
-        
-    except Exception as e:
-        print(f"ffmpeg-python extraction error: {e}")
-        raise
-
-def extract_frames_with_subprocess(video_path, output_dir, interval_sec=5):
-    """subprocessを使用したFFmpeg呼び出し"""
-    try:
+        # FFmpegで定間隔フレーム抽出
         output_pattern = os.path.join(output_dir, 'frame_%03d.jpg')
         cmd = [
             'ffmpeg', '-i', video_path,
@@ -444,132 +170,22 @@ def extract_frames_with_subprocess(video_path, output_dir, interval_sec=5):
         
         if result.returncode == 0:
             files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
-            print(f"Successfully extracted {len(files)} frames using subprocess")
-            
-            # タイムスタンプ情報付きで返す
-            frame_info = []
-            for i, filename in enumerate(files):
-                timestamp = i * interval_sec
-                frame_info.append({
-                    'filename': filename,
-                    'timestamp': timestamp,
-                    'time_display': f"{int(timestamp//60):02d}:{int(timestamp%60):02d}"
-                })
-            
-            print(f"DEBUG: Subprocess interval extraction with timestamps:")
-            for item in frame_info:
-                print(f"  {item['filename']} -> {item['timestamp']:.2f}s ({item['time_display']})")
-            
-            return frame_info
+            print(f"Successfully extracted {len(files)} frames")
+            return files
         else:
-            print(f"FFmpeg subprocess error: {result.stderr}")
+            print(f"FFmpeg error: {result.stderr}")
             return []
-        
-    except subprocess.TimeoutExpired:
-        print("FFmpeg timeout")
-        return []
-    except FileNotFoundError:
-        print("FFmpeg binary not found")
-        return []
-
-def extract_scenes_with_detection(video_path, output_dir):
-    """PySceneDetectを使用したシーン検出ベースのフレーム抽出"""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    try:
-        print(f"Starting scene detection for: {video_path}")
-        
-        # VideoManagerでビデオを開く
-        video_manager = VideoManager([video_path])
-        scene_manager = SceneManager()
-        
-        # ContentDetectorを追加（閾値30.0で設定）
-        scene_manager.add_detector(ContentDetector(threshold=30.0))
-        
-        # シーン検出を実行
-        video_manager.set_downscale_factor()
-        video_manager.start()
-        scene_manager.detect_scenes(frame_source=video_manager)
-        scene_list = scene_manager.get_scene_list()
-        
-        print(f"Detected {len(scene_list)} scenes")
-        
-        if not scene_list:
-            print("No scenes detected, falling back to interval extraction")
-            return []
-        
-        # 各シーンの開始フレームを抽出
-        frames = []
-        video_fps = video_manager.get_framerate()
-        
-        for i, scene in enumerate(scene_list):
-            try:
-                start_time = scene[0].get_seconds()
-                
-                # FFmpegでそのタイミングのフレームを抽出
-                output_filename = f'scene_{i+1:03d}.jpg'
-                output_path = os.path.join(output_dir, output_filename)
-                
-                # FFmpegコマンドで特定の時間のフレームを抽出
-                cmd = [
-                    'ffmpeg', '-ss', str(start_time), '-i', video_path,
-                    '-frames:v', '1', '-q:v', '2', '-y',
-                    output_path
-                ]
-                
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                
-                if result.returncode == 0 and os.path.exists(output_path):
-                    frames.append(output_filename)
-                    print(f"Extracted scene {i+1} at {start_time:.2f}s")
-                else:
-                    print(f"Failed to extract scene {i+1}: {result.stderr}")
-                    
-            except Exception as e:
-                print(f"Error extracting scene {i+1}: {e}")
-                continue
-        
-        video_manager.release()
-        print(f"Successfully extracted {len(frames)} scene frames")
-        return frames
         
     except Exception as e:
-        print(f"Scene detection failed: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Frame extraction error: {e}")
         return []
 
 def extract_scenes_with_ffmpeg(video_path, output_dir, sensitivity=0.15):
-    """FFmpegを使用した真のシーン検出"""
+    """FFmpegベースのシーン検出"""
     os.makedirs(output_dir, exist_ok=True)
     
     try:
-        print(f"Starting TRUE scene detection for: {video_path}")
-        print(f"Output directory: {output_dir}")
-        print(f"Video file exists: {os.path.exists(video_path)}")
-        if os.path.exists(video_path):
-            print(f"Video file size: {os.path.getsize(video_path)} bytes")
-        
-        # 動画の基本情報を取得
-        probe_cmd = ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', video_path]
-        print(f"Running probe command: {' '.join(probe_cmd)}")
-        duration_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
-        
-        if duration_result.returncode != 0:
-            print(f"Failed to get video duration - return code: {duration_result.returncode}")
-            return []
-        
-        try:
-            duration = float(duration_result.stdout.strip())
-        except ValueError:
-            print(f"Invalid duration format: '{duration_result.stdout.strip()}'")
-            return []
-        
-        print(f"Video duration: {duration:.2f} seconds")
-        
-        # FFmpegで真のシーン検出を実行
-        # ユーザー指定の感度を使用
-        print(f"Using scene detection sensitivity: {sensitivity}")
+        # シーン検出でタイムスタンプを取得
         scene_cmd = [
             'ffmpeg', '-i', video_path,
             '-vf', f'select=gt(scene\\,{sensitivity}),showinfo',
@@ -577,237 +193,67 @@ def extract_scenes_with_ffmpeg(video_path, output_dir, sensitivity=0.15):
             '-f', 'null', '-'
         ]
         
-        print(f"Running TRUE scene detection: {' '.join(scene_cmd)}")
         result = subprocess.run(scene_cmd, capture_output=True, text=True, timeout=120)
-        print(f"Scene detection return code: {result.returncode}")
         
-        # showinfo出力からタイムスタンプを抽出
+        # タイムスタンプを抽出
         timestamps = []
         lines = result.stderr.split('\n')
-        print(f"Processing {len(lines)} lines from FFmpeg output")
         
         for line in lines:
             if '[Parsed_showinfo_1' in line and 'pts_time:' in line:
                 try:
-                    # pts_time:12.345 の形式から時間を抽出
                     pts_start = line.find('pts_time:') + 9
                     pts_end = line.find(' ', pts_start)
                     if pts_end == -1:
-                        # 行末まで
                         pts_end = len(line)
-                        # タブや改行で区切られている場合も考慮
-                        for delim in ['\t', '\n', '\r']:
-                            delim_pos = line.find(delim, pts_start)
-                            if delim_pos != -1 and delim_pos < pts_end:
-                                pts_end = delim_pos
                     
                     timestamp_str = line[pts_start:pts_end].strip()
                     timestamp = float(timestamp_str)
                     timestamps.append(timestamp)
-                    print(f"Found scene change at: {timestamp:.2f}s")
-                except (ValueError, IndexError) as e:
-                    print(f"Error parsing timestamp from line: {line[:100]}... Error: {e}")
+                except ValueError:
                     continue
         
-        # 開始フレーム（0秒）を追加
         if 0.0 not in timestamps:
             timestamps.insert(0, 0.0)
         
-        # タイムスタンプをソートし、重複を除去
         timestamps = sorted(list(set(timestamps)))
-        print(f"Detected {len(timestamps)} unique scene changes: {timestamps[:10]}{'...' if len(timestamps) > 10 else ''}")
         
-        # シーンが検出されなかった場合のフォールバック
         if len(timestamps) <= 1:
-            print("No scene changes detected, using fallback intervals")
-            interval = max(5, duration / 15)  # 最大15フレーム
-            timestamps = [i * interval for i in range(int(duration / interval) + 1)]
-            timestamps = [t for t in timestamps if t < duration]
-            print(f"Fallback: generated {len(timestamps)} timestamps at {interval:.1f}s intervals")
+            # フォールバック：定間隔
+            return extract_frames_simple(video_path, output_dir, 5)
         
-        # 最大30フレームに制限
-        if len(timestamps) > 30:
-            print(f"Too many scenes ({len(timestamps)}), selecting every {len(timestamps)//30 + 1}th scene")
-            timestamps = timestamps[::len(timestamps)//30 + 1]
-        
-        # 各タイムスタンプでフレームを抽出
+        # フレーム抽出
         frames = []
-        successful_timestamps = []  # 成功したフレーム抽出のタイムスタンプを記録
-        frame_counter = 1
-        
-        for i, timestamp in enumerate(timestamps):
-            try:
-                output_filename = f'scene_{frame_counter:03d}.jpg'
-                output_path = os.path.join(output_dir, output_filename)
-                
-                cmd = [
-                    'ffmpeg', '-ss', str(timestamp), '-i', video_path,
-                    '-frames:v', '1', '-q:v', '2', '-y',
-                    output_path
-                ]
-                
-                frame_result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                
-                if frame_result.returncode == 0 and os.path.exists(output_path):
-                    frames.append(output_filename)
-                    successful_timestamps.append(timestamp)
-                    print(f"Extracted scene {frame_counter} at {timestamp:.2f}s")
-                    frame_counter += 1
-                else:
-                    print(f"Failed to extract scene at {timestamp:.2f}s: {frame_result.stderr}")
-                    
-            except Exception as e:
-                print(f"Error extracting scene at {timestamp:.2f}s: {e}")
-                continue
-        
-        print(f"Successfully extracted {len(frames)} TRUE scene frames")
-        print(f"Frame-timestamp pairs: {list(zip(frames, successful_timestamps))}")
-        
-        # フレーム情報とタイムスタンプを含む辞書として返す
-        frame_info = []
-        for frame, timestamp in zip(frames, successful_timestamps):
-            frame_info.append({
-                'filename': frame,
-                'timestamp': timestamp,
-                'time_display': f"{int(timestamp//60):02d}:{int(timestamp%60):02d}"
-            })
-        return frame_info
-        
-    except Exception as e:
-        print(f"TRUE scene detection failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
-
-def create_placeholder_frames(video_path, output_dir, original_filename):
-    """プレースホルダーフレームを生成"""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    try:
-        # 動画ファイルの情報を取得
-        file_size = os.path.getsize(video_path)
-        file_size_mb = file_size / (1024 * 1024)
-        
-        # より実用的なフレーム数計算
-        # ファイルサイズから大まかな動画時間を推定（粗い近似）
-        # 一般的に 1分の動画 ≈ 10-50MB（品質による）
-        estimated_duration_minutes = max(1, file_size_mb / 15)  # 15MB/分と仮定
-        
-        # 5秒間隔でフレーム抽出と仮定
-        frames_per_minute = 12  # 60秒 / 5秒間隔
-        estimated_frames = int(estimated_duration_minutes * frames_per_minute)
-        
-        # 実用的な範囲に制限（3〜20枚）
-        num_frames = min(20, max(3, estimated_frames))
-        frames = []
-        
-        for i in range(num_frames):
-            # 600x400のプレースホルダー画像を作成
-            img = Image.new('RGB', (600, 400), color=(70, 130, 180))
+        for i, timestamp in enumerate(timestamps[:20]):  # 最大20フレーム
+            output_filename = f'scene_{i+1:03d}.jpg'
+            output_path = os.path.join(output_dir, output_filename)
             
-            # 簡単なテキストを描画風に見せるために色付きの矩形を追加
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(img)
+            cmd = [
+                'ffmpeg', '-ss', str(timestamp), '-i', video_path,
+                '-frames:v', '1', '-q:v', '2', '-y',
+                output_path
+            ]
             
-            # 背景グラデーション風
-            for y in range(0, 400, 20):
-                color_intensity = int(70 + (y / 400) * 60)
-                draw.rectangle([0, y, 600, y+20], fill=(color_intensity, color_intensity+20, 180))
+            frame_result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             
-            # フレーム情報
-            frame_time = i * 5  # 5秒間隔を仮定
-            minutes = frame_time // 60
-            seconds = frame_time % 60
-            
-            # テキスト領域（白い背景）
-            draw.rectangle([50, 120, 550, 280], fill=(255, 255, 255, 220))
-            draw.rectangle([52, 122, 548, 278], outline=(100, 100, 100), width=2)
-            
-            # ファイル名を短縮
-            display_name = original_filename[:25] + "..." if len(original_filename) > 25 else original_filename
-            
-            # より詳細な情報表示用の矩形
-            # フレーム番号
-            draw.rectangle([70, 140, 300, 150], fill=(50, 100, 150))
-            # 時間情報
-            draw.rectangle([70, 160, 250, 170], fill=(100, 100, 100))
-            # ファイル名
-            draw.rectangle([70, 180, 400, 190], fill=(150, 150, 150))
-            # ファイルサイズ情報
-            draw.rectangle([70, 200, 320, 210], fill=(120, 120, 120))
-            # 推定時間情報
-            draw.rectangle([70, 220, 380, 230], fill=(80, 80, 80))
-            # フレーム総数
-            draw.rectangle([70, 240, 280, 250], fill=(60, 60, 60))
-            
-            filename = f'frame_{i+1:03d}.jpg'
-            filepath = os.path.join(output_dir, filename)
-            img.save(filepath, 'JPEG', quality=85)
-            frames.append(filename)
+            if frame_result.returncode == 0 and os.path.exists(output_path):
+                frames.append(output_filename)
         
         return frames
         
     except Exception as e:
-        print(f"Error creating placeholder frames: {e}")
+        print(f"Scene detection error: {e}")
         return []
 
-@app.route('/scenes/<path:filename>')
-def serve_scene(filename):
-    full_path = os.path.join(SCENES_FOLDER, filename)
-    print(f"Attempting to serve: {full_path}")
-    print(f"File exists: {os.path.exists(full_path)}")
-    if os.path.exists(full_path):
-        print(f"File size: {os.path.getsize(full_path)} bytes")
-    else:
-        print(f"Directory exists: {os.path.exists(os.path.dirname(full_path))}")
-        if os.path.exists(os.path.dirname(full_path)):
-            print(f"Directory contents: {os.listdir(os.path.dirname(full_path))}")
-    
-    if not os.path.exists(full_path):
-        return f"File not found: {filename}", 404
-    
+@app.route('/static/scenes/<path:filename>')
+def serve_scene_file(filename):
+    """抽出されたシーン画像を配信"""
     return send_from_directory(SCENES_FOLDER, filename)
 
 @app.route('/videos/<path:filename>')
 def serve_video(filename):
     """アップロードされた動画ファイルを配信"""
-    full_path = os.path.join(UPLOAD_FOLDER, filename)
-    print(f"Attempting to serve video: {full_path}")
-    print(f"Video file exists: {os.path.exists(full_path)}")
-    
-    if not os.path.exists(full_path):
-        return f"Video not found: {filename}", 404
-    
     return send_from_directory(UPLOAD_FOLDER, filename)
-
-@app.route('/debug-files/<path:folder_id>')
-def debug_files(folder_id):
-    """特定フォルダのファイル状況をデバッグ"""
-    folder_path = os.path.join(SCENES_FOLDER, folder_id)
-    
-    result = {
-        'folder_id': folder_id,
-        'scenes_folder': SCENES_FOLDER,
-        'full_folder_path': folder_path,
-        'folder_exists': os.path.exists(folder_path),
-        'base_dir_exists': os.path.exists(SCENES_FOLDER),
-    }
-    
-    if os.path.exists(SCENES_FOLDER):
-        result['scenes_folder_contents'] = os.listdir(SCENES_FOLDER)
-    
-    if os.path.exists(folder_path):
-        files = os.listdir(folder_path)
-        result['folder_contents'] = files
-        result['file_details'] = {}
-        for file in files:
-            file_path = os.path.join(folder_path, file)
-            result['file_details'][file] = {
-                'size': os.path.getsize(file_path),
-                'exists': os.path.exists(file_path)
-            }
-    
-    return jsonify(result)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

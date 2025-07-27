@@ -297,7 +297,7 @@
                             const filePrefix = isSceneDetection ? 'scene' : 'frame';
                             
                             for (let i = 1; i <= data.frames; i++) {
-                                const frameUrl = `${basePath}/${filePrefix}_${String(i).padStart(3, '0')}.jpg`;
+                                const frameUrl = `/static/scenes/${data.video_file.replace(/\.[^/.]+$/, '')}/${filePrefix}_${String(i).padStart(3, '0')}.jpg`;
                                 
                                 // 時間表示の決定
                                 let timeDisplay;

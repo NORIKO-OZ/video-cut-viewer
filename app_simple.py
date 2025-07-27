@@ -67,16 +67,17 @@ def index():
             # シーンデータを構築
             scenes = []
             if frame_data:
-                for i, frame_file in enumerate(frame_data):
-                    # 簡単な時間計算（実際の時間ではなく推定）
-                    timestamp_seconds = i * (interval if mode == 'interval' else 10)
-                    hours = timestamp_seconds // 3600
-                    minutes = (timestamp_seconds % 3600) // 60
-                    secs = timestamp_seconds % 60
-                    time_str = f"{hours:02d}:{minutes:02d}:{secs:02d}.000"
+                for frame_info in frame_data:
+                    # 実際のタイムスタンプを使用
+                    timestamp_seconds = frame_info['timestamp']
+                    hours = int(timestamp_seconds // 3600)
+                    minutes = int((timestamp_seconds % 3600) // 60)
+                    secs = int(timestamp_seconds % 60)
+                    millisecs = int((timestamp_seconds % 1) * 1000)
+                    time_str = f"{hours:02d}:{minutes:02d}:{secs:02d}.{millisecs:03d}"
                     
                     scenes.append({
-                        'image': f"{filename_no_ext}/{frame_file}",
+                        'image': f"{filename_no_ext}/{frame_info['filename']}",
                         'start': time_str
                     })
             
@@ -171,7 +172,15 @@ def extract_frames_simple(video_path, output_dir, interval_sec=5):
         if result.returncode == 0:
             files = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
             print(f"Successfully extracted {len(files)} frames")
-            return files
+            # 定間隔フレームの場合、タイムスタンプを計算
+            frame_data = []
+            for i, filename in enumerate(files):
+                timestamp = i * interval_sec
+                frame_data.append({
+                    'filename': filename,
+                    'timestamp': timestamp
+                })
+            return frame_data
         else:
             print(f"FFmpeg error: {result.stderr}")
             return []
@@ -224,6 +233,7 @@ def extract_scenes_with_ffmpeg(video_path, output_dir, sensitivity=0.15):
         
         # フレーム抽出
         frames = []
+        frame_data = []
         for i, timestamp in enumerate(timestamps[:20]):  # 最大20フレーム
             output_filename = f'scene_{i+1:03d}.jpg'
             output_path = os.path.join(output_dir, output_filename)
@@ -238,8 +248,12 @@ def extract_scenes_with_ffmpeg(video_path, output_dir, sensitivity=0.15):
             
             if frame_result.returncode == 0 and os.path.exists(output_path):
                 frames.append(output_filename)
+                frame_data.append({
+                    'filename': output_filename,
+                    'timestamp': timestamp
+                })
         
-        return frames
+        return frame_data
         
     except Exception as e:
         print(f"Scene detection error: {e}")
@@ -325,11 +339,23 @@ def export_pdf():
         # 各シーンの情報
         for i, image_file in enumerate(image_files):
             try:
-                # 時間計算（シンプルな推定）
-                timestamp_seconds = i * (int(interval) if mode == 'interval' else 10)
-                hours = timestamp_seconds // 3600
-                minutes = (timestamp_seconds % 3600) // 60
-                secs = timestamp_seconds % 60
+                # より正確な時間計算
+                if mode == 'interval':
+                    # 定間隔の場合は正確に計算
+                    timestamp_seconds = i * int(interval)
+                else:
+                    # シーン検出の場合、ファイル名から推定（完璧ではないが改善）
+                    # scene_001.jpg, scene_002.jpg のようなファイル名の場合
+                    if 'scene_' in image_file:
+                        scene_num = int(image_file.split('_')[1].split('.')[0])
+                        # シーン検出は不規則だが、経験的に最初のシーンが多い
+                        timestamp_seconds = scene_num * 5  # 暫定的な計算
+                    else:
+                        timestamp_seconds = i * 10  # フォールバック
+                
+                hours = int(timestamp_seconds // 3600)
+                minutes = int((timestamp_seconds % 3600) // 60)
+                secs = int(timestamp_seconds % 60)
                 time_str = f"{hours:02d}:{minutes:02d}:{secs:02d}"
                 
                 # 画像パス

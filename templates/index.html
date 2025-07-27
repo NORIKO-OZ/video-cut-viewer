@@ -664,7 +664,28 @@
                 {% endfor %}
             </div>
         </div>
+        {% else %}
+        <!-- Debug: No scenes variable found -->
+        <div style="text-align: center; padding: 40px; color: #999; font-style: italic;">
+            ファイルをアップロードしてシーンを抽出してください
+        </div>
         {% endif %}
+        
+        <!-- Debug info -->
+        <div style="background: rgba(0,0,0,0.3); color: #ccc; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 11px; border-radius: 4px; max-height: 100px; overflow-y: auto;">
+            <strong>Debug Info:</strong><br>
+            {% if scenes %}
+                Scenes: {{ scenes|length }} items<br>
+                {% for scene in scenes[:3] %}
+                    Scene {{ loop.index }}: {{ scene.image }} -> {{ scene.start }}<br>
+                {% endfor %}
+                {% if scenes|length > 3 %}...({{ scenes|length - 3 }} more){% endif %}
+            {% else %}
+                No scenes data
+            {% endif %}<br>
+            Video: {{ video if video else 'No video' }}<br>
+            Mode: {{ selected_mode if selected_mode else 'No mode' }}
+        </div>
     </div>
     
     <!-- 進捗表示モーダル -->
@@ -1056,7 +1077,10 @@
                 console.error('Progress stream error:', event);
                 progressEventSource.close();
                 // エラー時はシミュレートに切り替え
-                simulateProgress();
+                console.log('Falling back to simulated progress');
+                setTimeout(() => {
+                    simulateProgress();
+                }, 1000);
             };
         }
         
@@ -1108,17 +1132,19 @@
         function simulateProgress() {
             let progress = 0;
             const steps = [
-                { progress: 10, text: 'ファイルをアップロード中...', step: 'upload' },
-                { progress: 30, text: '動画の情報を取得中...', step: 'analyze' },
-                { progress: 50, text: 'シーンを検出中...', step: 'extract' },
-                { progress: 70, text: 'フレームを抽出中...', step: 'extract' },
-                { progress: 90, text: 'サムネイルを生成中...', step: 'extract' },
-                { progress: 100, text: '解析完了！', step: 'complete' }
+                { progress: 5, text: 'ファイルをアップロード中...', step: 'upload', delay: 2000 },
+                { progress: 15, text: '動画の情報を取得中...', step: 'analyze', delay: 3000 },
+                { progress: 35, text: '動画を解析中...', step: 'analyze', delay: 4000 },
+                { progress: 50, text: 'シーンを検出中...', step: 'extract', delay: 5000 },
+                { progress: 70, text: 'フレームを抽出中...', step: 'extract', delay: 8000 },
+                { progress: 85, text: 'サムネイルを生成中...', step: 'extract', delay: 3000 },
+                { progress: 95, text: '処理を完了中...', step: 'complete', delay: 2000 },
+                { progress: 100, text: '解析完了！', step: 'complete', delay: 1000 }
             ];
             
             let stepIndex = 0;
             
-            const interval = setInterval(() => {
+            function executeNextStep() {
                 if (stepIndex < steps.length) {
                     const currentStep = steps[stepIndex];
                     updateProgress(currentStep.progress, currentStep.text, currentStep.step);
@@ -1126,22 +1152,27 @@
                     // 推定時間の更新
                     const estimatedTime = document.getElementById('estimatedTime');
                     if (estimatedTime && currentStep.progress < 100) {
-                        const remaining = Math.max(1, Math.ceil((100 - currentStep.progress) / 10));
+                        const remaining = Math.max(5, Math.ceil((100 - currentStep.progress) * 0.8));
                         estimatedTime.textContent = `推定残り時間: ${remaining}秒`;
                     } else if (estimatedTime && currentStep.progress === 100) {
                         estimatedTime.textContent = '完了しました！';
                     }
                     
                     stepIndex++;
-                } else {
-                    clearInterval(interval);
-                    // 完了後、少し待ってから自動でページをリロード
-                    setTimeout(() => {
-                        hideProgress();
-                        window.location.reload();
-                    }, 2000);
+                    
+                    if (stepIndex < steps.length) {
+                        setTimeout(executeNextStep, currentStep.delay);
+                    } else {
+                        // 完了後、少し待ってから自動でページをリロード
+                        setTimeout(() => {
+                            hideProgress();
+                            window.location.reload();
+                        }, 3000);
+                    }
                 }
-            }, 1000);
+            }
+            
+            executeNextStep();
         }
         
         // フォーム送信時に進捗表示を開始
@@ -1169,10 +1200,10 @@
                         // 進捗表示を開始
                         showProgress();
                         
-                        // 少し待ってから進捗ストリームに接続
+                        // フォーム送信後に進捗ストリームに接続
                         setTimeout(() => {
                             connectToProgressStream(sessionId);
-                        }, 500);
+                        }, 2000);
                         
                         // 通常のフォーム送信を続行
                     }

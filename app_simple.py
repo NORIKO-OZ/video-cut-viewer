@@ -318,6 +318,7 @@ def index():
                     if not frame_data:
                         # FFmpegが使えない場合の代替処理
                         print("No frames extracted, showing error")
+                        print(f"FFmpeg available: {'ffmpeg' in str(subprocess.run(['which', 'ffmpeg'], capture_output=True, text=True).stdout) if os.name != 'nt' else 'Checking on Windows...'}")
                         if session_id:
                             update_progress(session_id, 0, 'error', 'フレーム抽出失敗', 0)
                         flash('動画の処理に失敗しました。ファイル形式を確認してください。')
@@ -343,6 +344,10 @@ def index():
                             print(f"Unexpected frame_data format: {type(item)} - {item}")
                 
                     print(f"Final scenes data: {scenes[:2] if scenes else 'No scenes'}")
+                    print(f"Scenes folder exists: {os.path.exists(scene_dir)}")
+                    if os.path.exists(scene_dir):
+                        files_in_dir = os.listdir(scene_dir)
+                        print(f"Files in scenes directory: {files_in_dir[:5]}")
                 
                     # 処理完了を通知
                     update_progress(session_id, 100, 'completed', '完了', 0)

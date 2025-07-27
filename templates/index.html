@@ -862,6 +862,11 @@
                 }
             });
             
+            // アップロードエリアクリックでファイル選択ダイアログを開く
+            uploadArea.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
             // ドラッグ&ドロップ機能
             uploadArea.addEventListener('dragover', function(e) {
                 e.preventDefault();

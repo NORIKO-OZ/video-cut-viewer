@@ -405,6 +405,53 @@
             background: linear-gradient(135deg, #047857 0%, #059669 100%);
         }
         
+        .export-section {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .export-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .export-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            letter-spacing: 0.3px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .export-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(5, 150, 105, 0.4);
+            background: linear-gradient(135deg, #047857 0%, #059669 100%);
+            color: white;
+            text-decoration: none;
+        }
+        
+        .pdf-btn {
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        }
+        
+        .pdf-btn:hover {
+            background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
+            box-shadow: 0 8px 20px rgba(220, 38, 38, 0.4);
+        }
+        
         .loading {
             text-align: center;
             padding: 60px;
@@ -587,6 +634,15 @@
         {% endif %}
         
         {% if scenes %}
+        <div class="export-section">
+            <div class="export-buttons">
+                <a href="{{ url_for('export_pdf', video=video, mode=selected_mode, interval=interval) }}" 
+                   class="export-btn pdf-btn" target="_blank">
+                    📄 PDFで保存
+                </a>
+            </div>
+        </div>
+        
         <div class="scenes-section">
             <h3>🎞️ 検出されたシーン ({{ scenes|length }}個)</h3>
             <div class="scenes-grid">

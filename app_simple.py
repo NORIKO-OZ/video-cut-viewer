@@ -4,8 +4,14 @@ import uuid
 import subprocess
 import tempfile
 import shutil
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, make_response
 from PIL import Image
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from io import BytesIO
 
 # パス設定
 if getattr(sys, 'frozen', False):
@@ -246,6 +252,127 @@ def serve_scene_file(filename):
 def serve_uploaded_file(filename):
     """アップロードされた動画ファイルを配信"""
     return send_from_directory(UPLOAD_FOLDER, filename)
+
+@app.route('/export_pdf')
+def export_pdf():
+    """PDF形式で解析結果をエクスポート"""
+    try:
+        # クエリパラメータから情報を取得
+        video_filename = request.args.get('video')
+        mode = request.args.get('mode', 'interval')
+        interval = request.args.get('interval', '5')
+        
+        if not video_filename:
+            return "動画ファイル名が指定されていません", 400
+        
+        # ファイル名から拡張子を除いた部分を取得
+        filename_no_ext = os.path.splitext(video_filename)[0]
+        scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
+        
+        if not os.path.exists(scene_dir):
+            return "解析結果が見つかりません", 404
+        
+        # 画像ファイルを取得
+        image_files = sorted([f for f in os.listdir(scene_dir) if f.endswith('.jpg')])
+        
+        if not image_files:
+            return "画像ファイルが見つかりません", 404
+        
+        # PDF生成
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                              rightMargin=inch*0.5, leftMargin=inch*0.5,
+                              topMargin=inch*0.5, bottomMargin=inch*0.5)
+        
+        # スタイル設定
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            spaceAfter=30,
+            alignment=1,  # 中央揃え
+            textColor=colors.darkgreen
+        )
+        
+        subtitle_style = ParagraphStyle(
+            'CustomSubtitle',
+            parent=styles['Normal'],
+            fontSize=12,
+            spaceAfter=20,
+            alignment=1,  # 中央揃え
+            textColor=colors.darkgrey
+        )
+        
+        # コンテンツを構築
+        story = []
+        
+        # タイトル
+        story.append(Paragraph("動画解析結果レポート", title_style))
+        
+        # 基本情報
+        mode_text = "シーン検出" if mode == 'scene' else f"間隔指定 ({interval}秒)"
+        story.append(Paragraph(f"解析方法: {mode_text}", subtitle_style))
+        story.append(Paragraph(f"動画ファイル: {video_filename}", subtitle_style))
+        story.append(Paragraph(f"抽出フレーム数: {len(image_files)}フレーム", subtitle_style))
+        story.append(Spacer(1, 20))
+        
+        # 各シーンの情報
+        for i, image_file in enumerate(image_files):
+            try:
+                # 時間計算（シンプルな推定）
+                timestamp_seconds = i * (int(interval) if mode == 'interval' else 10)
+                hours = timestamp_seconds // 3600
+                minutes = (timestamp_seconds % 3600) // 60
+                secs = timestamp_seconds % 60
+                time_str = f"{hours:02d}:{minutes:02d}:{secs:02d}"
+                
+                # 画像パス
+                image_path = os.path.join(scene_dir, image_file)
+                
+                if os.path.exists(image_path):
+                    # 画像のサイズ調整
+                    img = RLImage(image_path)
+                    img.drawHeight = 2*inch  # 高さを2インチに
+                    img.drawWidth = 3*inch   # 幅を3インチに
+                    
+                    # シーン情報テーブル
+                    scene_data = [
+                        [f"シーン {i+1}", f"時刻: {time_str}"],
+                        [img, ""]
+                    ]
+                    
+                    scene_table = Table(scene_data, colWidths=[3*inch, 2*inch])
+                    scene_table.setStyle(TableStyle([
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (1, 0), 12),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.lightgrey),
+                        ('BACKGROUND', (0, 0), (1, 0), colors.lightgreen),
+                    ]))
+                    
+                    story.append(scene_table)
+                    story.append(Spacer(1, 15))
+                    
+            except Exception as e:
+                print(f"Error processing image {image_file}: {e}")
+                continue
+        
+        # PDF生成
+        doc.build(story)
+        buffer.seek(0)
+        
+        # レスポンス作成
+        response = make_response(buffer.getvalue())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="video_analysis_{filename_no_ext}.pdf"'
+        
+        return response
+        
+    except Exception as e:
+        print(f"PDF export error: {e}")
+        return f"PDF作成中にエラーが発生しました: {str(e)}", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

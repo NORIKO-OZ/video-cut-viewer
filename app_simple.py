@@ -45,7 +45,14 @@ def update_progress(session_id, progress, status, step, estimated_time=0):
 
 def extract_scenes_with_ffmpeg(video_path, output_dir, session_id=None):
     """FFmpegを使用してシーン変化を検出してフレームを抽出"""
-    os.makedirs(output_dir, exist_ok=True)
+    print(f"extract_scenes_with_ffmpeg called with: {video_path}, {output_dir}")
+    
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Created scenes output directory: {output_dir}")
+    except Exception as e:
+        print(f"Failed to create scenes output directory: {e}")
+        return []
     
     if session_id:
         update_progress(session_id, 10, 'processing', 'シーン変化を検出中...', 60)
@@ -140,11 +147,20 @@ def extract_scenes_with_ffmpeg(video_path, output_dir, session_id=None):
         return []
     except Exception as e:
         print(f"Error in scene detection: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5, session_id=None):
     """FFmpegを使用してフレームを抽出"""
-    os.makedirs(output_dir, exist_ok=True)
+    print(f"extract_frames_with_ffmpeg called with: {video_path}, {output_dir}, {interval_sec}")
+    
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Created output directory: {output_dir}")
+    except Exception as e:
+        print(f"Failed to create output directory: {e}")
+        return []
     
     if session_id:
         update_progress(session_id, 10, 'processing', '動画情報を取得中...', 30)
@@ -161,11 +177,18 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5, session_i
         
         if duration_result.returncode != 0:
             print(f"FFprobe error: {duration_result.stderr}")
+            print(f"FFprobe command failed: {cmd_duration}")
             return []
         
         import json
-        duration_data = json.loads(duration_result.stdout)
-        video_duration = float(duration_data['format']['duration'])
+        try:
+            duration_data = json.loads(duration_result.stdout)
+            video_duration = float(duration_data['format']['duration'])
+            print(f"Video duration: {video_duration} seconds")
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            print(f"Failed to parse video duration: {e}")
+            print(f"FFprobe stdout: {duration_result.stdout}")
+            return []
         if session_id:
             update_progress(session_id, 30, 'processing', f'動画長さ: {int(video_duration)}秒', 20)
         
@@ -193,18 +216,29 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5, session_i
                 os.path.join(output_dir, f'screenshot_{frame_count:03d}.jpg')
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            
-            if result.returncode == 0:
-                hours = int(current_time // 3600)
-                minutes = int((current_time % 3600) // 60)
-                seconds = int(current_time % 60)
-                timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
-                timestamps.append(timestamp)
-                files.append(f'screenshot_{frame_count:03d}.jpg')
-                print(f"Frame {frame_count}: screenshot_{frame_count:03d}.jpg -> {timestamp} ({current_time}秒)")
-            else:
-                print(f"Failed to extract frame at {current_time}s: {result.stderr}")
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    output_file = os.path.join(output_dir, f'screenshot_{frame_count:03d}.jpg')
+                    if os.path.exists(output_file):
+                        hours = int(current_time // 3600)
+                        minutes = int((current_time % 3600) // 60)
+                        seconds = int(current_time % 60)
+                        timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}.000"
+                        timestamps.append(timestamp)
+                        files.append(f'screenshot_{frame_count:03d}.jpg')
+                        print(f"Frame {frame_count}: screenshot_{frame_count:03d}.jpg -> {timestamp} ({current_time}秒) - File exists: {os.path.getsize(output_file)} bytes")
+                    else:
+                        print(f"Frame extraction claimed success but file not found: {output_file}")
+                else:
+                    print(f"Failed to extract frame at {current_time}s: return code {result.returncode}")
+                    print(f"FFmpeg stderr: {result.stderr}")
+                    print(f"FFmpeg command: {' '.join(cmd)}")
+            except subprocess.TimeoutExpired:
+                print(f"FFmpeg timeout at {current_time}s")
+            except Exception as e:
+                print(f"Exception during frame extraction at {current_time}s: {e}")
             
             current_time += interval_sec
         
@@ -213,10 +247,12 @@ def extract_frames_with_ffmpeg(video_path, output_dir, interval_sec=5, session_i
         return list(zip(files, timestamps))
         
     except subprocess.TimeoutExpired:
-        print("FFmpeg timeout")
+        print("FFmpeg timeout in extract_frames_with_ffmpeg")
         return []
     except Exception as e:
-        print(f"Error extracting frames: {e}")
+        print(f"Error extracting frames in extract_frames_with_ffmpeg: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def seconds_to_timecode(seconds):
@@ -307,6 +343,9 @@ def index():
                 try:
                     print(f"Starting frame extraction for: {filename}")
                     print(f"File size: {os.path.getsize(filepath)} bytes")
+                    print(f"Video file path: {filepath}")
+                    print(f"Output directory: {scene_dir}")
+                    print(f"Output directory exists: {os.path.exists(scene_dir)}")
                 
                     if mode == 'scene':
                         frame_data = extract_scenes_with_ffmpeg(filepath, scene_dir, session_id)
@@ -318,7 +357,23 @@ def index():
                     if not frame_data:
                         # FFmpegが使えない場合の代替処理
                         print("No frames extracted, showing error")
-                        print(f"FFmpeg available: {'ffmpeg' in str(subprocess.run(['which', 'ffmpeg'], capture_output=True, text=True).stdout) if os.name != 'nt' else 'Checking on Windows...'}")
+                        print(f"Mode: {mode}, Interval: {interval}")
+                        print(f"Video file path: {filepath}")
+                        print(f"Video file exists: {os.path.exists(filepath)}")
+                        print(f"Output directory: {scene_dir}")
+                        print(f"Output directory exists: {os.path.exists(scene_dir)}")
+                        
+                        # FFmpegのバージョンチェック
+                        try:
+                            ffmpeg_result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=10)
+                            print(f"FFmpeg available: {ffmpeg_result.returncode == 0}")
+                            if ffmpeg_result.returncode == 0:
+                                print(f"FFmpeg version: {ffmpeg_result.stdout.split('\n')[0]}")
+                            else:
+                                print(f"FFmpeg error: {ffmpeg_result.stderr}")
+                        except Exception as e:
+                            print(f"FFmpeg check failed: {e}")
+                        
                         if session_id:
                             update_progress(session_id, 0, 'error', 'フレーム抽出失敗', 0)
                         flash('動画の処理に失敗しました。ファイル形式を確認してください。')
@@ -363,9 +418,10 @@ def index():
                     print(f"処理エラー: {e}")
                     import traceback
                     traceback.print_exc()
+                    print(f"Error occurred in video processing: {type(e).__name__}: {str(e)}")
                     if session_id:
                         update_progress(session_id, 0, 'error', f'エラー: {str(e)}', 0)
-                    flash('動画の処理中にエラーが発生しました')
+                    flash(f'動画の処理中にエラーが発生しました: {str(e)}')
                     return redirect(request.url), 500
                 
         except Exception as e:

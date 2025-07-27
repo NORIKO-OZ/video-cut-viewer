@@ -26,8 +26,63 @@ os.makedirs(SCENES_FOLDER, exist_ok=True)
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 app.secret_key = 'your-secret-key-here'
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
+    if request.method == 'POST':
+        try:
+            if 'video' not in request.files:
+                return render_template('index.html', error='動画ファイルを選択してください')
+            
+            file = request.files['video']
+            if file.filename == '':
+                return render_template('index.html', error='動画ファイルを選択してください')
+            
+            # ファイル保存
+            filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            
+            # 処理モードを取得
+            mode = request.form.get('mode', 'interval')
+            interval = int(request.form.get('interval', 5))
+            
+            print(f"Processing mode: {mode}, interval: {interval}s")
+            
+            # フレーム抽出
+            filename_no_ext = os.path.splitext(filename)[0]
+            scene_dir = os.path.join(SCENES_FOLDER, filename_no_ext)
+            
+            if mode == 'scene':
+                frame_data = extract_scenes_with_ffmpeg(filepath, scene_dir)
+            else:
+                frame_data = extract_frames_simple(filepath, scene_dir, interval)
+            
+            # シーンデータを構築
+            scenes = []
+            if frame_data:
+                for i, frame_file in enumerate(frame_data):
+                    # 簡単な時間計算（実際の時間ではなく推定）
+                    timestamp_seconds = i * (interval if mode == 'interval' else 10)
+                    hours = timestamp_seconds // 3600
+                    minutes = (timestamp_seconds % 3600) // 60
+                    secs = timestamp_seconds % 60
+                    time_str = f"{hours:02d}:{minutes:02d}:{secs:02d}.000"
+                    
+                    scenes.append({
+                        'image': f"{filename_no_ext}/{frame_file}",
+                        'start': time_str
+                    })
+            
+            return render_template('index.html', 
+                                 video=filename, 
+                                 scenes=scenes, 
+                                 selected_mode=mode, 
+                                 interval=interval)
+            
+        except Exception as e:
+            print(f"Error processing video: {e}")
+            return render_template('index.html', error=f'動画処理中にエラーが発生しました: {str(e)}')
+    
     return render_template('index.html')
 
 @app.route('/health')
@@ -187,8 +242,8 @@ def serve_scene_file(filename):
     """抽出されたシーン画像を配信"""
     return send_from_directory(SCENES_FOLDER, filename)
 
-@app.route('/videos/<path:filename>')
-def serve_video(filename):
+@app.route('/uploads/<path:filename>')
+def serve_uploaded_file(filename):
     """アップロードされた動画ファイルを配信"""
     return send_from_directory(UPLOAD_FOLDER, filename)
 

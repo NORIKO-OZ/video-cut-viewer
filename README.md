@@ -1,1 +1,1 @@
-# Force redeploy
+# Force redeploy - Debug video processing

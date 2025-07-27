@@ -176,6 +176,82 @@
             color: #10b981;
         }
         
+        .progress-container {
+            display: none;
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(5, 150, 105, 0.1);
+            border: 1px solid rgba(5, 150, 105, 0.3);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .progress-container.show {
+            display: block;
+        }
+        
+        .progress-title {
+            color: #10b981;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.1em;
+        }
+        
+        .progress-bar-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 3px;
+            margin-bottom: 10px;
+        }
+        
+        .progress-bar {
+            height: 20px;
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            border-radius: 8px;
+            transition: width 0.3s ease;
+            width: 0%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, 
+                transparent 35%, 
+                rgba(255,255,255,0.2) 50%, 
+                transparent 65%);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .progress-text {
+            text-align: center;
+            color: #e0e0e0;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        
+        .progress-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(5, 150, 105, 0.3);
+            border-top: 2px solid #10b981;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
         input[type="submit"] {
             background: linear-gradient(135deg, #059669 0%, #10b981 100%);
             color: white;
@@ -479,7 +555,19 @@
                         </div>
                     </div>
                 </div>
-                <input type="submit" value="🚀 アップロード & 解析開始">
+                <input type="submit" value="🚀 アップロード & 解析開始" id="submit-btn">
+                
+                <!-- 進捗表示エリア -->
+                <div id="progress-container" class="progress-container">
+                    <div class="progress-title">
+                        <span class="progress-spinner"></span>
+                        <span id="progress-title-text">動画を処理中...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="progress-bar" class="progress-bar"></div>
+                    </div>
+                    <div id="progress-text" class="progress-text">0%</div>
+                </div>
             </form>
         </div>
         
@@ -642,6 +730,114 @@
             }
         }
         
+        // 進捗表示機能
+        function showProgress() {
+            const progressContainer = document.getElementById('progress-container');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            progressContainer.classList.add('show');
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.6';
+            
+            // シミュレーションの進捗更新
+            simulateProgress();
+        }
+        
+        function hideProgress() {
+            const progressContainer = document.getElementById('progress-container');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            progressContainer.classList.remove('show');
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+            
+            // プログレスバーをリセット
+            updateProgress(0);
+        }
+        
+        function updateProgress(percentage) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            
+            progressBar.style.width = percentage + '%';
+            progressText.textContent = Math.round(percentage) + '%';
+        }
+        
+        function simulateProgress() {
+            let progress = 0;
+            const interval = setInterval(() => {
+                // 進捗を段階的に更新（実際の処理に合わせて調整）
+                if (progress < 20) {
+                    progress += Math.random() * 3 + 1; // アップロード段階：速め
+                } else if (progress < 80) {
+                    progress += Math.random() * 2 + 0.5; // 処理段階：中程度
+                } else if (progress < 95) {
+                    progress += Math.random() * 1 + 0.2; // 完了段階：遅め
+                }
+                
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                }
+                
+                updateProgress(progress);
+                
+                // 進捗に応じてタイトルテキストを更新
+                const titleText = document.getElementById('progress-title-text');
+                if (progress < 20) {
+                    titleText.textContent = 'ファイルをアップロード中...';
+                } else if (progress < 50) {
+                    titleText.textContent = '動画を解析中...';
+                } else if (progress < 80) {
+                    titleText.textContent = 'フレームを抽出中...';
+                } else if (progress < 100) {
+                    titleText.textContent = 'サムネイルを生成中...';
+                } else {
+                    titleText.textContent = '処理完了！';
+                }
+            }, 100);
+        }
+        
+        // フォーム送信をAJAXに変更
+        function initFormSubmission() {
+            const form = document.querySelector('form');
+            if (!form) return;
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                
+                // 進捗表示開始
+                showProgress();
+                
+                // フォーム送信
+                fetch('/', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.text();
+                    }
+                    throw new Error('Network response was not ok');
+                })
+                .then(html => {
+                    // 成功時はページを更新
+                    setTimeout(() => {
+                        document.documentElement.innerHTML = html;
+                        // 新しいページでイベントリスナーを再初期化
+                        setTimeout(initializeApp, 100);
+                    }, 500); // 少し待ってから完了
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    hideProgress();
+                    alert('処理中にエラーが発生しました。もう一度お試しください。');
+                });
+            });
+        }
+        
         // ファイルアップロード機能の初期化
         function initFileUpload() {
             const fileInput = document.getElementById('file-input');
@@ -692,13 +888,16 @@
             });
         }
         
-        // 動画プレイヤーのイベントリスナー
-        document.addEventListener('DOMContentLoaded', function() {
+        // アプリの初期化
+        function initializeApp() {
             const video = document.getElementById('videoPlayer');
             const timeDisplay = document.getElementById('timeDisplay');
             
             // ファイルアップロード機能を初期化
             initFileUpload();
+            
+            // フォーム送信機能を初期化
+            initFormSubmission();
             
             // モード選択ラジオボタンにイベントリスナーを追加
             const modeRadios = document.querySelectorAll('input[name="mode"]');
@@ -769,9 +968,12 @@
                 video.addEventListener('loadedmetadata', updateTimeDisplay);
                 video.addEventListener('durationchange', updateTimeDisplay);
             }
-        });
+        }
         
         console.log('Video Cut Viewer with time sync loaded');
+        
+        // ページ読み込み時にアプリを初期化
+        document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
 </body>
 </html>

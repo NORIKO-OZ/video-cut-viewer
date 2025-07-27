@@ -44,6 +44,7 @@ def index():
                 return render_template('index.html', error='動画ファイルを選択してください')
             
             # ファイル保存
+            original_filename = file.filename
             filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
             filepath = os.path.join(UPLOAD_FOLDER, filename)
             file.save(filepath)
@@ -81,6 +82,7 @@ def index():
             
             return render_template('index.html', 
                                  video=filename, 
+                                 original_filename=original_filename,
                                  scenes=scenes, 
                                  selected_mode=mode, 
                                  interval=interval)
@@ -259,6 +261,7 @@ def export_pdf():
     try:
         # クエリパラメータから情報を取得
         video_filename = request.args.get('video')
+        original_filename = request.args.get('original_filename', video_filename)
         mode = request.args.get('mode', 'interval')
         interval = request.args.get('interval', '5')
         
@@ -284,7 +287,7 @@ def export_pdf():
                               rightMargin=inch*0.5, leftMargin=inch*0.5,
                               topMargin=inch*0.5, bottomMargin=inch*0.5)
         
-        # スタイル設定
+        # スタイル設定（日本語対応）
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
             'CustomTitle',
@@ -292,7 +295,8 @@ def export_pdf():
             fontSize=18,
             spaceAfter=30,
             alignment=1,  # 中央揃え
-            textColor=colors.darkgreen
+            textColor=colors.darkgreen,
+            fontName='Helvetica-Bold'
         )
         
         subtitle_style = ParagraphStyle(
@@ -301,20 +305,21 @@ def export_pdf():
             fontSize=12,
             spaceAfter=20,
             alignment=1,  # 中央揃え
-            textColor=colors.darkgrey
+            textColor=colors.darkgrey,
+            fontName='Helvetica'
         )
         
         # コンテンツを構築
         story = []
         
         # タイトル
-        story.append(Paragraph("動画解析結果レポート", title_style))
+        story.append(Paragraph("Video Analysis Report", title_style))
         
         # 基本情報
-        mode_text = "シーン検出" if mode == 'scene' else f"間隔指定 ({interval}秒)"
-        story.append(Paragraph(f"解析方法: {mode_text}", subtitle_style))
-        story.append(Paragraph(f"動画ファイル: {video_filename}", subtitle_style))
-        story.append(Paragraph(f"抽出フレーム数: {len(image_files)}フレーム", subtitle_style))
+        mode_text = "Scene Detection" if mode == 'scene' else f"Interval Extraction ({interval}s)"
+        story.append(Paragraph(f"Analysis Method: {mode_text}", subtitle_style))
+        story.append(Paragraph(f"Video File: {original_filename}", subtitle_style))
+        story.append(Paragraph(f"Extracted Frames: {len(image_files)} frames", subtitle_style))
         story.append(Spacer(1, 20))
         
         # 各シーンの情報
@@ -331,18 +336,36 @@ def export_pdf():
                 image_path = os.path.join(scene_dir, image_file)
                 
                 if os.path.exists(image_path):
-                    # 画像のサイズ調整
+                    # 元画像のサイズを取得して比率を保持
+                    with Image.open(image_path) as pil_img:
+                        width, height = pil_img.size
+                        aspect_ratio = width / height
+                    
+                    # PDF用画像サイズを比率を保持して設定
+                    max_width = 4.5 * inch
+                    max_height = 3 * inch
+                    
+                    if aspect_ratio > max_width / max_height:
+                        # 横長の場合
+                        img_width = max_width
+                        img_height = max_width / aspect_ratio
+                    else:
+                        # 縦長の場合
+                        img_height = max_height
+                        img_width = max_height * aspect_ratio
+                    
+                    # 画像オブジェクト作成
                     img = RLImage(image_path)
-                    img.drawHeight = 2*inch  # 高さを2インチに
-                    img.drawWidth = 3*inch   # 幅を3インチに
+                    img.drawWidth = img_width
+                    img.drawHeight = img_height
                     
                     # シーン情報テーブル
                     scene_data = [
-                        [f"シーン {i+1}", f"時刻: {time_str}"],
+                        [f"Scene {i+1}", f"Time: {time_str}"],
                         [img, ""]
                     ]
                     
-                    scene_table = Table(scene_data, colWidths=[3*inch, 2*inch])
+                    scene_table = Table(scene_data, colWidths=[max_width, 1.5*inch])
                     scene_table.setStyle(TableStyle([
                         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -363,10 +386,13 @@ def export_pdf():
         doc.build(story)
         buffer.seek(0)
         
+        # 元ファイル名からPDFファイル名を作成
+        pdf_filename = os.path.splitext(original_filename)[0] + "_analysis.pdf"
+        
         # レスポンス作成
         response = make_response(buffer.getvalue())
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename="video_analysis_{filename_no_ext}.pdf"'
+        response.headers['Content-Disposition'] = f'attachment; filename="{pdf_filename}"'
         
         return response
         

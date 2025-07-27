@@ -636,7 +636,7 @@
         {% if scenes %}
         <div class="export-section">
             <div class="export-buttons">
-                <a href="{{ url_for('export_pdf', video=video, mode=selected_mode, interval=interval) }}" 
+                <a href="{{ url_for('export_pdf', video=video, original_filename=original_filename, mode=selected_mode, interval=interval) }}" 
                    class="export-btn pdf-btn" target="_blank">
                     📄 PDFで保存
                 </a>
